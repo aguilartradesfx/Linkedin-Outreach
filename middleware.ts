@@ -2,6 +2,16 @@ import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { createServerClient, type CookieOptions } from '@supabase/ssr'
 
+const INTERNAL_PREFIXES = [
+  '/admin',
+  '/contratos',
+  '/clientes',
+  '/linkedin-pipeline',
+  '/solicitudes',
+  '/conversaciones',
+  '/usuarios',
+]
+
 export async function middleware(request: NextRequest) {
   let response = NextResponse.next({ request })
 
@@ -30,24 +40,15 @@ export async function middleware(request: NextRequest) {
     } = await supabase.auth.getUser()
 
     const path = request.nextUrl.pathname
-    const isInternalRoute =
-      path.startsWith('/admin') ||
-      path.startsWith('/contratos') ||
-      path.startsWith('/clientes') ||
-      path.startsWith('/linkedin-pipeline')
+    const isInternal = INTERNAL_PREFIXES.some((prefix) => path.startsWith(prefix))
 
-    if (isInternalRoute && !user) {
+    if (isInternal && !user) {
       return NextResponse.redirect(new URL('/login', request.url))
     }
   } catch {
-    // If Supabase is unreachable, redirect to login for internal routes
     const path = request.nextUrl.pathname
-    if (
-      path.startsWith('/admin') ||
-      path.startsWith('/contratos') ||
-      path.startsWith('/clientes') ||
-      path.startsWith('/linkedin-pipeline')
-    ) {
+    const isInternal = INTERNAL_PREFIXES.some((prefix) => path.startsWith(prefix))
+    if (isInternal) {
       return NextResponse.redirect(new URL('/login', request.url))
     }
   }
@@ -56,5 +57,13 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/admin/:path*', '/contratos/:path*', '/clientes/:path*', '/linkedin-pipeline/:path*'],
+  matcher: [
+    '/admin/:path*',
+    '/contratos/:path*',
+    '/clientes/:path*',
+    '/linkedin-pipeline/:path*',
+    '/solicitudes/:path*',
+    '/conversaciones/:path*',
+    '/usuarios/:path*',
+  ],
 }
