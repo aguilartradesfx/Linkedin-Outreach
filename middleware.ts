@@ -62,13 +62,14 @@ export async function middleware(request: NextRequest) {
       if (requiredPermission) {
         const { data: profile } = await supabase
           .from('user_profiles')
-          .select(`is_admin, ${requiredPermission}`)
+          .select('*')
           .eq('id', user.id)
           .single()
 
+        const p = profile as Record<string, unknown> | null
         const hasAccess =
-          profile?.is_admin === true ||
-          !!profile?.[requiredPermission as keyof typeof profile]
+          p?.['is_admin'] === true ||
+          !!p?.[requiredPermission]
 
         if (!hasAccess) {
           return NextResponse.redirect(new URL('/admin', request.url))
