@@ -3,24 +3,49 @@
 import Image from 'next/image'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
-import { FileText, Users, LogOut, Menu, X, Network, LayoutDashboard, ClipboardList, MessageCircle, UserCog } from 'lucide-react'
+import {
+  FileText, Users, LogOut, Menu, X, Network,
+  LayoutDashboard, ClipboardList, MessageCircle, UserCog,
+} from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { useState } from 'react'
+import type { UserProfile } from '@/types/user-profiles'
 
-const navItems = [
-  { href: '/admin',             label: 'Inicio',          icon: LayoutDashboard },
-  { href: '/contratos',         label: 'Contratos',       icon: FileText },
-  { href: '/clientes',          label: 'Clientes',        icon: Users },
-  { href: '/solicitudes',       label: 'Solicitudes',     icon: ClipboardList },
-  { href: '/conversaciones',    label: 'Conversaciones',  icon: MessageCircle },
-  { href: '/linkedin-pipeline', label: 'LinkedIn Pipeline', icon: Network },
-  { href: '/usuarios',          label: 'Usuarios',        icon: UserCog },
+interface NavItem {
+  href: string
+  label: string
+  icon: React.ElementType
+  // null = always visible; string = key in UserProfile that must be true
+  permission: keyof UserProfile | null
+}
+
+const NAV_ITEMS: NavItem[] = [
+  { href: '/admin',             label: 'Inicio',           icon: LayoutDashboard, permission: null },
+  { href: '/contratos',         label: 'Contratos',        icon: FileText,        permission: 'can_view_contracts' },
+  { href: '/clientes',          label: 'Clientes',         icon: Users,           permission: 'can_view_clients' },
+  { href: '/solicitudes',       label: 'Solicitudes',      icon: ClipboardList,   permission: 'can_submit_proposals' },
+  { href: '/conversaciones',    label: 'Conversaciones',   icon: MessageCircle,   permission: 'can_view_linkedin' },
+  { href: '/linkedin-pipeline', label: 'LinkedIn Pipeline',icon: Network,         permission: 'can_view_linkedin' },
+  { href: '/usuarios',          label: 'Usuarios',         icon: UserCog,         permission: 'is_admin' },
 ]
 
-export function InternalNav() {
+function isVisible(item: NavItem, profile: UserProfile | null): boolean {
+  if (item.permission === null) return true
+  if (!profile) return false
+  if (profile.is_admin) return true // admins see everything
+  return !!profile[item.permission]
+}
+
+interface InternalNavProps {
+  profile: UserProfile | null
+}
+
+export function InternalNav({ profile }: InternalNavProps) {
   const pathname = usePathname()
   const router = useRouter()
   const [mobileOpen, setMobileOpen] = useState(false)
+
+  const visibleItems = NAV_ITEMS.filter((item) => isVisible(item, profile))
 
   async function handleLogout() {
     const supabase = createClient()
@@ -43,8 +68,8 @@ export function InternalNav() {
 
       {/* Navigation */}
       <nav className="flex-1 px-3 py-4 space-y-0.5">
-        {navItems.map(({ href, label, icon: Icon }) => {
-          const active = pathname.startsWith(href)
+        {visibleItems.map(({ href, label, icon: Icon }) => {
+          const active = pathname.startsWith(href) && (href !== '/admin' || pathname === '/admin')
           return (
             <Link
               key={href}
@@ -89,10 +114,7 @@ export function InternalNav() {
           <Image src="/logo-white.svg" alt="Bralto" width={80} height={20} className="h-5 w-auto object-contain" />
           <span className="text-orange-500 text-[10px] font-medium uppercase tracking-widest">interno</span>
         </div>
-        <button
-          onClick={() => setMobileOpen(!mobileOpen)}
-          className="text-white/60 hover:text-white p-1"
-        >
+        <button onClick={() => setMobileOpen(!mobileOpen)} className="text-white/60 hover:text-white p-1">
           {mobileOpen ? <X size={20} /> : <Menu size={20} />}
         </button>
       </div>

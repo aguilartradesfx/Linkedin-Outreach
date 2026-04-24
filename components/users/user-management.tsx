@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useCallback } from 'react'
-import { Plus, X, Copy, Check, Loader2, Users, Trash2, Shield, RefreshCw } from 'lucide-react'
+import { Plus, X, Copy, Check, Loader2, Users, Trash2, Shield, RefreshCw, Pencil } from 'lucide-react'
 import type { UserWithProfile } from '@/types/user-profiles'
 import { PERMISSION_LABELS } from '@/types/user-profiles'
 
@@ -59,6 +59,7 @@ function AddUserModal({ onClose, onCreated }: AddUserModalProps) {
   const [error, setError] = useState<string | null>(null)
   const [fullName, setFullName] = useState('')
   const [email, setEmail] = useState('')
+  const [isAdmin, setIsAdmin] = useState(false)
   const [permissions, setPermissions] = useState<Record<PermissionKey, boolean>>({
     can_view_contracts: false,
     can_manage_contracts: false,
@@ -69,8 +70,9 @@ function AddUserModal({ onClose, onCreated }: AddUserModalProps) {
     can_view_linkedin: false,
   })
 
-  function setPreset(preset: 'sales' | 'viewer' | 'all') {
-    if (preset === 'sales') {
+  function setPreset(preset: 'user' | 'admin') {
+    if (preset === 'user') {
+      setIsAdmin(false)
       setPermissions({
         can_view_contracts: false,
         can_manage_contracts: false,
@@ -80,17 +82,8 @@ function AddUserModal({ onClose, onCreated }: AddUserModalProps) {
         can_view_proposals: false,
         can_view_linkedin: false,
       })
-    } else if (preset === 'viewer') {
-      setPermissions({
-        can_view_contracts: true,
-        can_manage_contracts: false,
-        can_view_clients: true,
-        can_manage_clients: false,
-        can_submit_proposals: true,
-        can_view_proposals: true,
-        can_view_linkedin: true,
-      })
     } else {
+      setIsAdmin(true)
       const all = {} as Record<PermissionKey, boolean>
       ;(Object.keys(PERMISSION_LABELS) as PermissionKey[]).forEach((k) => (all[k] = true))
       setPermissions(all)
@@ -106,7 +99,11 @@ function AddUserModal({ onClose, onCreated }: AddUserModalProps) {
     const res = await fetch('/api/users', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: email.trim(), full_name: fullName.trim() || null, permissions }),
+      body: JSON.stringify({
+        email: email.trim(),
+        full_name: fullName.trim() || null,
+        permissions: { ...permissions, is_admin: isAdmin },
+      }),
     })
 
     const data = await res.json()
@@ -145,19 +142,24 @@ function AddUserModal({ onClose, onCreated }: AddUserModalProps) {
             <div className="flex items-center justify-between mb-2">
               <label className={LABEL + ' mb-0'}>Permisos</label>
               <div className="flex gap-1">
-                {(['sales', 'viewer', 'all'] as const).map((p) => (
+                {(['user', 'admin'] as const).map((p) => (
                   <button
                     key={p}
                     type="button"
                     onClick={() => setPreset(p)}
-                    className="text-[10px] px-2 py-0.5 rounded border border-white/10 text-white/40 hover:text-white/70 hover:border-white/25 transition-colors"
+                    className="text-[10px] px-2.5 py-0.5 rounded border border-white/10 text-white/40 hover:text-white/70 hover:border-white/25 transition-colors"
                   >
-                    {p === 'sales' ? 'Vendedor' : p === 'viewer' ? 'Viewer' : 'Todo'}
+                    {p === 'user' ? 'Usuario' : 'Admin'}
                   </button>
                 ))}
               </div>
             </div>
             <div className="space-y-2 bg-white/[0.02] border border-white/[0.06] rounded-lg p-3">
+              {/* Admin toggle at the top */}
+              <div className="flex items-center justify-between gap-3 pb-2 mb-1 border-b border-white/[0.06]">
+                <span className="text-xs text-orange-400/80 font-medium">Administrador</span>
+                <Toggle checked={isAdmin} onChange={setIsAdmin} />
+              </div>
               {(Object.entries(PERMISSION_LABELS) as [PermissionKey, string][]).map(([key, label]) => (
                 <div key={key} className="flex items-center justify-between gap-3">
                   <span className="text-xs text-white/60">{label}</span>
@@ -182,6 +184,102 @@ function AddUserModal({ onClose, onCreated }: AddUserModalProps) {
             >
               {loading && <Loader2 size={14} className="animate-spin" />}
               {loading ? 'Creando...' : 'Crear usuario'}
+            </button>
+            <button type="button" onClick={onClose} className="px-4 py-2.5 text-sm text-white/40 hover:text-white/70 transition-colors">
+              Cancelar
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  )
+}
+
+// ─── Edit User Modal ───────────────────────────────────────────────────────────
+
+interface EditUserModalProps {
+  user: UserWithProfile
+  onClose: () => void
+  onUpdated: (u: UserWithProfile) => void
+}
+
+function EditUserModal({ user, onClose, onUpdated }: EditUserModalProps) {
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [fullName, setFullName] = useState(user.profile?.full_name ?? '')
+  const [email, setEmail] = useState(user.email ?? '')
+  const [password, setPassword] = useState('')
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    setLoading(true)
+    setError(null)
+
+    const body: Record<string, string> = {}
+    const trimmedName = fullName.trim()
+    const trimmedEmail = email.trim()
+    const trimmedPassword = password.trim()
+
+    if (trimmedName !== (user.profile?.full_name ?? '')) body.full_name = trimmedName
+    if (trimmedEmail && trimmedEmail !== user.email) body.email = trimmedEmail
+    if (trimmedPassword) body.password = trimmedPassword
+
+    if (Object.keys(body).length === 0) { onClose(); return }
+
+    const res = await fetch(`/api/users/${user.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    })
+
+    const data = await res.json()
+    if (!res.ok) { setError(data.error ?? 'Error al actualizar'); setLoading(false); return }
+
+    onUpdated({
+      ...user,
+      email: body.email ?? user.email,
+      profile: data,
+    })
+    onClose()
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/70" onClick={onClose} />
+      <div className="relative bg-[#111111] border border-white/[0.1] rounded-xl w-full max-w-sm overflow-hidden">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-white/[0.06]">
+          <h2 className="text-base font-semibold text-white">Editar usuario</h2>
+          <button onClick={onClose} className="text-white/30 hover:text-white/70 p-1 transition-colors">
+            <X size={17} />
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="p-5 space-y-4">
+          <div>
+            <label className={LABEL}>Nombre completo</label>
+            <input className={INPUT} placeholder="Juan Pérez" value={fullName} onChange={(e) => setFullName(e.target.value)} />
+          </div>
+          <div>
+            <label className={LABEL}>Email</label>
+            <input type="email" className={INPUT} value={email} onChange={(e) => setEmail(e.target.value)} />
+          </div>
+          <div>
+            <label className={LABEL}>Nueva contraseña <span className="text-white/30 font-normal">(dejar vacío para no cambiar)</span></label>
+            <input type="password" className={INPUT} placeholder="••••••••" value={password} onChange={(e) => setPassword(e.target.value)} />
+          </div>
+
+          {error && (
+            <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">{error}</p>
+          )}
+
+          <div className="flex gap-2 pt-1">
+            <button
+              type="submit"
+              disabled={loading}
+              className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-orange-500 hover:bg-orange-600 disabled:opacity-50 text-white text-sm font-medium rounded-lg transition-colors"
+            >
+              {loading && <Loader2 size={14} className="animate-spin" />}
+              {loading ? 'Guardando...' : 'Guardar cambios'}
             </button>
             <button type="button" onClick={onClose} className="px-4 py-2.5 text-sm text-white/40 hover:text-white/70 transition-colors">
               Cancelar
@@ -235,17 +333,18 @@ function PasswordModal({ email, password, onClose }: { email: string; password: 
 
 // ─── Permissions row (inline edit) ────────────────────────────────────────────
 
-function UserPermissionsRow({ user, onUpdated, onDeleted }: {
+function UserPermissionsRow({ user, onUpdated, onDeleted, onEdit }: {
   user: UserWithProfile
   onUpdated: (u: UserWithProfile) => void
   onDeleted: (id: string) => void
+  onEdit: (u: UserWithProfile) => void
 }) {
   const profile = user.profile
   const [saving, setSaving] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [expanded, setExpanded] = useState(false)
 
-  async function togglePermission(key: PermissionKey, value: boolean) {
+  async function togglePermission(key: PermissionKey | 'is_admin', value: boolean) {
     setSaving(true)
     const res = await fetch(`/api/users/${user.id}`, {
       method: 'PATCH',
@@ -303,6 +402,13 @@ function UserPermissionsRow({ user, onUpdated, onDeleted }: {
             </button>
             {saving && <Loader2 size={12} className="animate-spin text-white/30" />}
             <button
+              onClick={() => onEdit(user)}
+              className="text-white/20 hover:text-white/60 transition-colors"
+              title="Editar usuario"
+            >
+              <Pencil size={12} />
+            </button>
+            <button
               onClick={handleDelete}
               disabled={deleting}
               className="text-white/20 hover:text-red-400 transition-colors disabled:opacity-50"
@@ -313,15 +419,24 @@ function UserPermissionsRow({ user, onUpdated, onDeleted }: {
           </div>
         </td>
       </tr>
-      {expanded && profile && (
+      {expanded && (
         <tr className="border-b border-white/[0.04]">
           <td colSpan={4} className="px-4 pb-3 pt-0">
             <div className="bg-white/[0.02] border border-white/[0.06] rounded-lg p-3 grid grid-cols-1 sm:grid-cols-2 gap-2">
+              {/* Admin toggle */}
+              <div className="flex items-center justify-between gap-3 col-span-full pb-2 mb-1 border-b border-white/[0.06]">
+                <span className="text-xs text-orange-400/80 font-medium">Administrador</span>
+                <Toggle
+                  checked={!!profile?.is_admin}
+                  onChange={(v) => togglePermission('is_admin', v)}
+                  disabled={saving}
+                />
+              </div>
               {(Object.entries(PERMISSION_LABELS) as [PermissionKey, string][]).map(([key, label]) => (
                 <div key={key} className="flex items-center justify-between gap-3">
                   <span className="text-xs text-white/50">{label}</span>
                   <Toggle
-                    checked={!!profile[key as keyof typeof profile]}
+                    checked={!!profile?.[key as keyof typeof profile]}
                     onChange={(v) => togglePermission(key, v)}
                     disabled={saving}
                   />
@@ -345,9 +460,9 @@ interface UserManagementProps {
 export function UserManagement({ isAdmin, initialUsers }: UserManagementProps) {
   const [users, setUsers] = useState<UserWithProfile[]>(initialUsers)
   const [showModal, setShowModal] = useState(false)
+  const [editingUser, setEditingUser] = useState<UserWithProfile | null>(null)
   const [createdUser, setCreatedUser] = useState<{ email: string; password: string } | null>(null)
 
-  // Refresh list after mutations via API
   const fetchUsers = useCallback(async () => {
     const res = await fetch('/api/users')
     if (res.ok) setUsers(await res.json())
@@ -361,7 +476,7 @@ export function UserManagement({ isAdmin, initialUsers }: UserManagementProps) {
   }
 
   function handleUpdated(updated: UserWithProfile) {
-    setUsers((prev) => prev.map((u) => (u.id === updated.id ? { ...u, profile: updated.profile } : u)))
+    setUsers((prev) => prev.map((u) => (u.id === updated.id ? updated : u)))
   }
 
   function handleDeleted(id: string) {
@@ -423,6 +538,7 @@ export function UserManagement({ isAdmin, initialUsers }: UserManagementProps) {
                   user={u}
                   onUpdated={handleUpdated}
                   onDeleted={handleDeleted}
+                  onEdit={setEditingUser}
                 />
               ))}
             </tbody>
@@ -434,6 +550,14 @@ export function UserManagement({ isAdmin, initialUsers }: UserManagementProps) {
         <AddUserModal
           onClose={() => setShowModal(false)}
           onCreated={handleCreated}
+        />
+      )}
+
+      {editingUser && (
+        <EditUserModal
+          user={editingUser}
+          onClose={() => setEditingUser(null)}
+          onUpdated={(updated) => { handleUpdated(updated); setEditingUser(null) }}
         />
       )}
 

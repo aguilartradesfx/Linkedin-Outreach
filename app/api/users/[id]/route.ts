@@ -23,7 +23,24 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   if (!ctx) return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
 
   const body = await request.json()
-  const { full_name, is_admin, ...permissions } = body
+  const { full_name, is_admin, email, password, ...permissions } = body
+
+  // Update auth credentials if provided
+  if (email || password) {
+    const authUpdate: { email?: string; password?: string } = {}
+    if (email) authUpdate.email = email
+    if (password) authUpdate.password = password
+    const { error: authError } = await ctx.service.auth.admin.updateUserById(id, authUpdate)
+    if (authError) return NextResponse.json({ error: authError.message }, { status: 500 })
+  }
+
+  const hasProfileChanges =
+    full_name !== undefined || is_admin !== undefined || Object.keys(permissions).length > 0
+
+  if (!hasProfileChanges) {
+    const { data: current } = await ctx.service.from('user_profiles').select('*').eq('id', id).single()
+    return NextResponse.json(current ?? { id })
+  }
 
   const { data, error } = await ctx.service
     .from('user_profiles')
