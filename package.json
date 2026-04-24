@@ -1,0 +1,23 @@
+{
+  "name": "bralto-linkedin-agent",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "vercel dev",
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "simulate": "ts-node test/simulate-conversation.ts"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "latest",
+    "@supabase/supabase-js": "^2",
+    "zod": "^3"
+  },
+  "devDependencies": {
+    "typescript": "^5",
+    "ts-node": "^10",
+    "@types/node": "^20",
+    "dotenv": "^16",
+    "@vercel/node": "^3"
+  }
+}
