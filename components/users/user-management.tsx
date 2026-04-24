@@ -1,7 +1,7 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
-import { Plus, X, Copy, Check, Loader2, Users, Trash2, Shield } from 'lucide-react'
+import { useState, useCallback } from 'react'
+import { Plus, X, Copy, Check, Loader2, Users, Trash2, Shield, RefreshCw } from 'lucide-react'
 import type { UserWithProfile } from '@/types/user-profiles'
 import { PERMISSION_LABELS } from '@/types/user-profiles'
 
@@ -337,35 +337,21 @@ function UserPermissionsRow({ user, onUpdated, onDeleted }: {
 
 // ─── Main component ────────────────────────────────────────────────────────────
 
-type FetchState = 'loading' | 'ok' | 'forbidden' | 'error'
+interface UserManagementProps {
+  isAdmin: boolean
+  initialUsers: UserWithProfile[]
+}
 
-export function UserManagement() {
-  const [users, setUsers] = useState<UserWithProfile[]>([])
-  const [fetchState, setFetchState] = useState<FetchState>('loading')
-  const [fetchError, setFetchError] = useState<string | null>(null)
+export function UserManagement({ isAdmin, initialUsers }: UserManagementProps) {
+  const [users, setUsers] = useState<UserWithProfile[]>(initialUsers)
   const [showModal, setShowModal] = useState(false)
   const [createdUser, setCreatedUser] = useState<{ email: string; password: string } | null>(null)
 
+  // Refresh list after mutations via API
   const fetchUsers = useCallback(async () => {
-    setFetchState('loading')
-    try {
-      const res = await fetch('/api/users')
-      if (res.status === 403) { setFetchState('forbidden'); return }
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}))
-        setFetchError(body.error ?? `Error ${res.status}`)
-        setFetchState('error')
-        return
-      }
-      setUsers(await res.json())
-      setFetchState('ok')
-    } catch (e) {
-      setFetchError(e instanceof Error ? e.message : 'Error de red')
-      setFetchState('error')
-    }
+    const res = await fetch('/api/users')
+    if (res.ok) setUsers(await res.json())
   }, [])
-
-  useEffect(() => { fetchUsers() }, [fetchUsers])
 
   function handleCreated(user: UserWithProfile, tempPassword: string) {
     setUsers((prev) => [user, ...prev])
@@ -384,36 +370,11 @@ export function UserManagement() {
 
   const centered = 'fixed inset-0 md:left-56 flex flex-col items-center justify-center text-center px-4'
 
-  if (fetchState === 'loading') {
-    return (
-      <div className={centered}>
-        <Loader2 size={20} className="animate-spin text-white/20 mb-3" />
-        <p className="text-white/30 text-sm">Cargando...</p>
-      </div>
-    )
-  }
-
-  if (fetchState === 'forbidden') {
+  if (!isAdmin) {
     return (
       <div className={centered}>
         <Shield size={32} className="text-white/10 mb-3" />
         <p className="text-white/30 text-sm">No tienes permisos para gestionar usuarios.</p>
-      </div>
-    )
-  }
-
-  if (fetchState === 'error') {
-    return (
-      <div className={centered}>
-        <Shield size={32} className="text-red-500/20 mb-3" />
-        <p className="text-white/50 text-sm mb-1">Error al cargar usuarios</p>
-        <p className="text-white/25 text-xs mb-4">{fetchError}</p>
-        <button
-          onClick={fetchUsers}
-          className="text-xs text-orange-400 hover:text-orange-300 transition-colors"
-        >
-          Reintentar
-        </button>
       </div>
     )
   }
@@ -425,13 +386,18 @@ export function UserManagement() {
           <h1 className="text-xl font-semibold text-white">Usuarios</h1>
           <p className="text-sm text-white/40 mt-0.5">{users.length} usuario(s) registrado(s)</p>
         </div>
-        <button
-          onClick={() => setShowModal(true)}
-          className="flex items-center gap-2 px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white text-sm font-medium rounded-lg transition-colors"
-        >
-          <Plus size={15} />
-          Agregar usuario
-        </button>
+        <div className="flex items-center gap-2">
+          <button onClick={fetchUsers} className="p-2 text-white/30 hover:text-white/60 border border-white/10 rounded-lg transition-colors">
+            <RefreshCw size={13} />
+          </button>
+          <button
+            onClick={() => setShowModal(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white text-sm font-medium rounded-lg transition-colors"
+          >
+            <Plus size={15} />
+            Agregar usuario
+          </button>
+        </div>
       </div>
 
       {users.length === 0 ? (
