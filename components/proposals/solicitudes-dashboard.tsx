@@ -158,6 +158,9 @@ function DetailPanel({ proposal, onClose, onUpdated, onDeleted }: DetailPanelPro
           {/* Dates */}
           <div className="text-xs text-white/25 space-y-1 pt-2 border-t border-white/[0.06]">
             <div>Enviada: {formatDate(proposal.created_at)}</div>
+            {(proposal as ProposalRequest & { submitted_by_name?: string }).submitted_by_name && (
+              <div>Por: <span className="text-white/40">{(proposal as ProposalRequest & { submitted_by_name?: string }).submitted_by_name}</span></div>
+            )}
           </div>
 
           {/* Internal notes */}
@@ -345,7 +348,7 @@ export function SolicitudesDashboard() {
               <tr>
                 <th className={TH}>Cliente</th>
                 <th className={TH}>Servicios</th>
-                <th className={TH}>Presupuesto</th>
+                <th className={TH}>Enviado por</th>
                 <th className={TH}>Prioridad</th>
                 <th className={TH}>Estado</th>
                 <th className={TH}>Fecha</th>
@@ -369,7 +372,9 @@ export function SolicitudesDashboard() {
                     </div>
                   </td>
                   <td className={TD}>
-                    <span className="text-xs text-white/50">{BUDGET_LABELS[p.budget_range]}</span>
+                    <span className="text-xs text-white/60">
+                      {(p as ProposalRequest & { submitted_by_name?: string }).submitted_by_name ?? '—'}
+                    </span>
                   </td>
                   <td className={TD}>
                     <span className={`text-xs font-medium ${PRIORITY_COLORS[p.priority]}`}>

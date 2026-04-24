@@ -14,7 +14,24 @@ export async function GET() {
     .order('created_at', { ascending: false })
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-  return NextResponse.json(data)
+
+  // Attach submitter names from user_profiles
+  const submitterIds = [...new Set((data ?? []).map((p) => p.submitted_by).filter(Boolean))]
+  let profileMap: Record<string, string> = {}
+  if (submitterIds.length > 0) {
+    const { data: profiles } = await service
+      .from('user_profiles')
+      .select('id, full_name')
+      .in('id', submitterIds)
+    profiles?.forEach((p) => { profileMap[p.id] = p.full_name ?? 'Sin nombre' })
+  }
+
+  const result = (data ?? []).map((p) => ({
+    ...p,
+    submitted_by_name: p.submitted_by ? (profileMap[p.submitted_by] ?? 'Desconocido') : null,
+  }))
+
+  return NextResponse.json(result)
 }
 
 export async function POST(request: Request) {

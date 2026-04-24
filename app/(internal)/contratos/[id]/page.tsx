@@ -145,6 +145,21 @@ export default async function ContratoDetailPage({ params }: Props) {
 
         {/* Contract rendered */}
         <div className="bg-white rounded-2xl shadow-xl p-10">
+          <style>{`
+            .contract-document, .contract-document * { color: #111827 !important; }
+            .contract-document h1 { font-size: 1.125rem; font-weight: 700; text-align: center; margin-bottom: 2rem; letter-spacing: -0.01em; }
+            .contract-document h2 { font-size: 0.9rem; font-weight: 700; margin-top: 2rem; margin-bottom: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; }
+            .contract-document h3 { font-size: 0.875rem; font-weight: 600; margin-top: 1.5rem; margin-bottom: 0.5rem; }
+            .contract-document p { font-size: 0.875rem; line-height: 1.75; color: #374151 !important; margin-bottom: 0.75rem; text-align: justify; }
+            .contract-document strong { color: #111827 !important; font-weight: 700; }
+            .contract-document ul { margin: 0.5rem 0 0.5rem 1.25rem; }
+            .contract-document li { font-size: 0.875rem; line-height: 1.75; color: #374151 !important; margin-bottom: 0.25rem; }
+            .contract-document hr { margin: 1.5rem 0; border-color: #e5e7eb; }
+            .contract-document table { width: 100%; border-collapse: collapse; margin-top: 2rem; }
+            .contract-document td { padding: 1rem; vertical-align: top; border-top: 1px solid #e5e7eb; font-size: 0.875rem; color: #374151 !important; }
+            .contract-document blockquote { display: none; }
+            .contract-document small { color: #6b7280 !important; }
+          `}</style>
           <div
             className="contract-document"
             style={{ fontFamily: 'Georgia, "Times New Roman", serif' }}

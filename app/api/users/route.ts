@@ -12,37 +12,38 @@ function generatePassword(length = 12): string {
 }
 
 export async function GET() {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
+  try {
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
 
-  // Only admins can list users
-  const service = createServiceClient()
-  const { data: profile } = await service
-    .from('user_profiles')
-    .select('is_admin')
-    .eq('id', user.id)
-    .single()
+    const service = createServiceClient()
+    const { data: profile } = await service
+      .from('user_profiles')
+      .select('is_admin')
+      .eq('id', user.id)
+      .single()
 
-  if (!profile?.is_admin) return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
+    if (!profile?.is_admin) return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
 
-  const { data: { users }, error } = await service.auth.admin.listUsers()
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    const { data: { users }, error } = await service.auth.admin.listUsers()
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-  const { data: profiles } = await service
-    .from('user_profiles')
-    .select('*')
+    const { data: profiles } = await service.from('user_profiles').select('*')
+    const profileMap = new Map((profiles ?? []).map((p) => [p.id, p]))
 
-  const profileMap = new Map((profiles ?? []).map((p) => [p.id, p]))
+    const result = users.map((u) => ({
+      id: u.id,
+      email: u.email,
+      created_at: u.created_at,
+      profile: profileMap.get(u.id) ?? null,
+    }))
 
-  const result = users.map((u) => ({
-    id: u.id,
-    email: u.email,
-    created_at: u.created_at,
-    profile: profileMap.get(u.id) ?? null,
-  }))
-
-  return NextResponse.json(result)
+    return NextResponse.json(result)
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : 'Error interno del servidor'
+    return NextResponse.json({ error: msg }, { status: 500 })
+  }
 }
 
 export async function POST(request: Request) {
