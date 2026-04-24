@@ -337,18 +337,32 @@ function UserPermissionsRow({ user, onUpdated, onDeleted }: {
 
 // ─── Main component ────────────────────────────────────────────────────────────
 
+type FetchState = 'loading' | 'ok' | 'forbidden' | 'error'
+
 export function UserManagement() {
   const [users, setUsers] = useState<UserWithProfile[]>([])
-  const [loading, setLoading] = useState(true)
+  const [fetchState, setFetchState] = useState<FetchState>('loading')
+  const [fetchError, setFetchError] = useState<string | null>(null)
   const [showModal, setShowModal] = useState(false)
   const [createdUser, setCreatedUser] = useState<{ email: string; password: string } | null>(null)
-  const [isAdmin, setIsAdmin] = useState(false)
 
   const fetchUsers = useCallback(async () => {
-    const res = await fetch('/api/users')
-    if (res.status === 403) { setIsAdmin(false); setLoading(false); return }
-    if (res.ok) { setUsers(await res.json()); setIsAdmin(true) }
-    setLoading(false)
+    setFetchState('loading')
+    try {
+      const res = await fetch('/api/users')
+      if (res.status === 403) { setFetchState('forbidden'); return }
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        setFetchError(body.error ?? `Error ${res.status}`)
+        setFetchState('error')
+        return
+      }
+      setUsers(await res.json())
+      setFetchState('ok')
+    } catch (e) {
+      setFetchError(e instanceof Error ? e.message : 'Error de red')
+      setFetchState('error')
+    }
   }, [])
 
   useEffect(() => { fetchUsers() }, [fetchUsers])
@@ -368,22 +382,38 @@ export function UserManagement() {
     setUsers((prev) => prev.filter((u) => u.id !== id))
   }
 
-  if (loading) {
+  const centered = 'fixed inset-0 md:left-56 flex flex-col items-center justify-center text-center px-4'
+
+  if (fetchState === 'loading') {
     return (
-      <div className="p-4 md:p-8 flex items-center gap-2 text-white/30 text-sm">
-        <Loader2 size={14} className="animate-spin" />
-        Cargando...
+      <div className={centered}>
+        <Loader2 size={20} className="animate-spin text-white/20 mb-3" />
+        <p className="text-white/30 text-sm">Cargando...</p>
       </div>
     )
   }
 
-  if (!isAdmin) {
+  if (fetchState === 'forbidden') {
     return (
-      <div className="p-4 md:p-8 max-w-lg">
-        <div className="flex flex-col items-center justify-center py-20">
-          <Shield size={32} className="text-white/10 mb-3" />
-          <p className="text-white/30 text-sm">No tienes permisos para gestionar usuarios.</p>
-        </div>
+      <div className={centered}>
+        <Shield size={32} className="text-white/10 mb-3" />
+        <p className="text-white/30 text-sm">No tienes permisos para gestionar usuarios.</p>
+      </div>
+    )
+  }
+
+  if (fetchState === 'error') {
+    return (
+      <div className={centered}>
+        <Shield size={32} className="text-red-500/20 mb-3" />
+        <p className="text-white/50 text-sm mb-1">Error al cargar usuarios</p>
+        <p className="text-white/25 text-xs mb-4">{fetchError}</p>
+        <button
+          onClick={fetchUsers}
+          className="text-xs text-orange-400 hover:text-orange-300 transition-colors"
+        >
+          Reintentar
+        </button>
       </div>
     )
   }
