@@ -272,7 +272,7 @@ export function SolicitudesDashboard() {
   }
 
   return (
-    <div className="p-4 md:p-8 max-w-7xl">
+    <div className="p-4 md:p-8 max-w-7xl min-h-screen flex flex-col">
       {showSuccess && (
         <div className="mb-4 px-4 py-3 bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 text-sm rounded-lg">
           Solicitud enviada correctamente. El equipo la revisará pronto.
@@ -330,7 +330,7 @@ export function SolicitudesDashboard() {
           Cargando...
         </div>
       ) : filtered.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-20">
+        <div className="flex-1 flex flex-col items-center justify-center py-20">
           <ClipboardList size={32} className="text-white/10 mb-3" />
           <p className="text-white/30 text-sm mb-1">
             {proposals.length === 0 ? 'Aún no hay solicitudes' : 'Sin resultados para este filtro'}

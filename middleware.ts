@@ -12,6 +12,17 @@ const INTERNAL_PREFIXES = [
   '/usuarios',
 ]
 
+// Specific permission required to access each route prefix.
+// Routes not listed here (e.g. /admin) require auth only.
+const ROUTE_PERMISSIONS: Record<string, string> = {
+  '/contratos':         'can_view_contracts',
+  '/clientes':          'can_view_clients',
+  '/solicitudes':       'can_submit_proposals',
+  '/conversaciones':    'can_view_linkedin',
+  '/linkedin-pipeline': 'can_view_linkedin',
+  '/usuarios':          'is_admin',
+}
+
 export async function middleware(request: NextRequest) {
   let response = NextResponse.next({ request })
 
@@ -35,15 +46,34 @@ export async function middleware(request: NextRequest) {
       },
     )
 
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-
+    const { data: { user } } = await supabase.auth.getUser()
     const path = request.nextUrl.pathname
     const isInternal = INTERNAL_PREFIXES.some((prefix) => path.startsWith(prefix))
 
     if (isInternal && !user) {
       return NextResponse.redirect(new URL('/login', request.url))
+    }
+
+    if (user && isInternal) {
+      const requiredPermission = Object.entries(ROUTE_PERMISSIONS).find(
+        ([prefix]) => path.startsWith(prefix),
+      )?.[1]
+
+      if (requiredPermission) {
+        const { data: profile } = await supabase
+          .from('user_profiles')
+          .select(`is_admin, ${requiredPermission}`)
+          .eq('id', user.id)
+          .single()
+
+        const hasAccess =
+          profile?.is_admin === true ||
+          !!profile?.[requiredPermission as keyof typeof profile]
+
+        if (!hasAccess) {
+          return NextResponse.redirect(new URL('/admin', request.url))
+        }
+      }
     }
   } catch {
     const path = request.nextUrl.pathname
