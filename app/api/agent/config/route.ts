@@ -3,14 +3,13 @@ import { createClient } from '@/lib/supabase/server'
 import { createServiceClient } from '@/lib/supabase/service'
 import { SYSTEM_PROMPT } from '@/lib/prompts/system'
 
-export async function GET() {
-  try {
-    const supabase = await createClient()
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+export const dynamic = 'force-dynamic'
 
+export async function GET() {
+  // GET is intentionally unauthenticated — the system prompt is not sensitive
+  // and the page is already protected by middleware for authenticated users.
+  try {
     const service = createServiceClient()
-    // maybeSingle() returns null (no error) when the table is empty
     const { data } = await service
       .from('agent_config')
       .select('value')
@@ -19,7 +18,6 @@ export async function GET() {
 
     return NextResponse.json({ prompt: data?.value ?? SYSTEM_PROMPT })
   } catch {
-    // Any failure (missing table, env issues, etc.) → return the hardcoded default
     return NextResponse.json({ prompt: SYSTEM_PROMPT })
   }
 }
@@ -27,8 +25,11 @@ export async function GET() {
 export async function PUT(request: Request) {
   try {
     const supabase = await createClient()
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
+
+    if (authError || !user) {
+      return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+    }
 
     const body = await request.json()
     const { prompt } = body
@@ -46,7 +47,8 @@ export async function PUT(request: Request) {
 
     return NextResponse.json({ success: true })
   } catch (e) {
-    const msg = e instanceof Error ? e.message : 'Error interno'
+    const msg = e instanceof Error ? e.message : String(e)
+    console.error('[agent-config PUT]', msg)
     return NextResponse.json({ error: msg }, { status: 500 })
   }
 }
