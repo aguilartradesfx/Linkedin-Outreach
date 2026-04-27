@@ -9,6 +9,20 @@ import type { AgentResponse, Message } from './types';
 const MAX_TOOL_ITERATIONS = 8;
 const MODEL = 'claude-sonnet-4-6';
 
+async function getSystemPrompt(): Promise<string> {
+  try {
+    const { data } = await supabase
+      .from('agent_config')
+      .select('value')
+      .eq('id', 'system_prompt')
+      .single();
+    if (data?.value) return data.value;
+  } catch {
+    // fallback to file constant
+  }
+  return SYSTEM_PROMPT;
+}
+
 export async function runAgent(
   prospectId: string,
   incomingMessage: string
@@ -47,7 +61,8 @@ export async function runAgent(
   );
 
   // Inyectar el prospect_id en el sistema para que Claude pueda usarlo en las tools
-  const systemWithContext = `${SYSTEM_PROMPT}\n\n## CONTEXTO DE SESIÓN\nProspect ID activo: ${prospectId}\nUsá este ID en todas las llamadas a tools que requieran prospect_id.`;
+  const activePrompt = await getSystemPrompt();
+  const systemWithContext = `${activePrompt}\n\n## CONTEXTO DE SESIÓN\nProspect ID activo: ${prospectId}\nUsá este ID en todas las llamadas a tools que requieran prospect_id.`;
 
   let response = await anthropic.messages.create({
     model: MODEL,
