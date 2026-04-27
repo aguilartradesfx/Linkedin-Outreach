@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { Save, Bot, User, Loader2, RotateCcw, Send, CheckCheck } from 'lucide-react'
+import { Save, Bot, User, Loader2, RotateCcw, Send, CheckCheck, AlertCircle } from 'lucide-react'
 
 interface TestMessage {
   role: 'user' | 'assistant'
@@ -12,6 +12,7 @@ export function AgentConfig() {
   const [prompt, setPrompt] = useState('')
   const [savedPrompt, setSavedPrompt] = useState('')
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [saveSuccess, setSaveSuccess] = useState(false)
 
@@ -23,10 +24,17 @@ export function AgentConfig() {
 
   useEffect(() => {
     fetch('/api/agent/config')
-      .then(r => r.json())
+      .then(r => {
+        if (!r.ok) throw new Error(`Error ${r.status}`)
+        return r.json()
+      })
       .then(data => {
         setPrompt(data.prompt ?? '')
         setSavedPrompt(data.prompt ?? '')
+        setLoading(false)
+      })
+      .catch(err => {
+        setLoadError(err.message ?? 'Error al cargar el prompt')
         setLoading(false)
       })
   }, [])
@@ -89,7 +97,7 @@ export function AgentConfig() {
   }
 
   return (
-    <div className="flex h-screen overflow-hidden">
+    <div className="flex h-full overflow-hidden">
       {/* ── Left panel: prompt editor ──────────────────────────────────── */}
       <div className="w-1/2 border-r border-white/[0.08] flex flex-col min-h-0">
         <div className="px-5 py-4 border-b border-white/[0.06] flex items-center justify-between flex-shrink-0">
@@ -127,6 +135,17 @@ export function AgentConfig() {
         {loading ? (
           <div className="flex-1 flex items-center justify-center">
             <Loader2 size={16} className="animate-spin text-white/30" />
+          </div>
+        ) : loadError ? (
+          <div className="flex-1 flex flex-col items-center justify-center gap-3 px-6 text-center">
+            <AlertCircle size={20} className="text-red-400/60" />
+            <p className="text-sm text-white/40">{loadError}</p>
+            <button
+              onClick={() => { setLoadError(null); setLoading(true); fetch('/api/agent/config').then(r => r.json()).then(d => { setPrompt(d.prompt ?? ''); setSavedPrompt(d.prompt ?? ''); setLoading(false) }).catch(e => { setLoadError(e.message); setLoading(false) }) }}
+              className="text-xs text-orange-400 hover:text-orange-300 transition-colors"
+            >
+              Reintentar
+            </button>
           </div>
         ) : (
           <textarea

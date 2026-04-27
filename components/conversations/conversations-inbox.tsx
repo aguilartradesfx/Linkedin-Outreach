@@ -213,23 +213,18 @@ export function ConversationsInbox() {
       supabase
         .from('linkedin_agent_messages')
         .select('prospect_id, content, role, created_at')
-        .order('created_at', { ascending: false }),
+        .order('created_at', { ascending: false })
+        .limit(500), // DESC order → first hit per prospect_id = latest message
     ])
 
     if (!prospects || !messages) { setLoading(false); return }
 
-    // Build map: prospect_id → last message
-    const seen = new Set<string>()
-    const lastMsgMap = new Map<string, { content: string; role: string; created_at: string; count: number }>()
-
+    // Build map: prospect_id → last message (first seen = latest, since sorted DESC)
+    const lastMsgMap = new Map<string, { content: string; role: string; created_at: string }>()
     for (const m of messages) {
       const pid = m.prospect_id as string
-      if (!seen.has(pid)) {
-        seen.add(pid)
-        lastMsgMap.set(pid, { content: m.content as string, role: m.role as string, created_at: m.created_at as string, count: 1 })
-      } else {
-        const existing = lastMsgMap.get(pid)!
-        existing.count++
+      if (!lastMsgMap.has(pid)) {
+        lastMsgMap.set(pid, { content: m.content as string, role: m.role as string, created_at: m.created_at as string })
       }
     }
 
@@ -242,7 +237,7 @@ export function ConversationsInbox() {
           lastMessage: msg.content,
           lastMessageRole: msg.role as 'prospect' | 'agent' | 'system',
           lastMessageAt: msg.created_at,
-          unreadCount: msg.count,
+          unreadCount: 0,
         }
       })
       .sort((a, b) => new Date(b.lastMessageAt).getTime() - new Date(a.lastMessageAt).getTime())
@@ -271,7 +266,7 @@ export function ConversationsInbox() {
     : items
 
   return (
-    <div className="flex h-[calc(100vh-0px)] md:h-screen overflow-hidden">
+    <div className="flex h-full overflow-hidden">
       {/* Sidebar list */}
       <div className={`w-full md:w-80 lg:w-96 flex-shrink-0 border-r border-white/[0.08] flex flex-col ${selected ? 'hidden md:flex' : 'flex'}`}>
         {/* Header */}
