@@ -8,16 +8,58 @@ function getHeaders() {
   }
 }
 
-// Extrae el username de una URL de LinkedIn
-function extractUsername(linkedinUrl: string): string | null {
-  const match = linkedinUrl.match(/linkedin\.com\/in\/([^/?#]+)/)
-  return match ? match[1].toLowerCase() : null
+export interface UnipileAttendee {
+  id: string
+  name?: string
+  identifier?: string
+  provider_id?: string
+  is_self?: boolean
 }
 
-// Pagina por los chats del account buscando el que corresponde al username
+export interface UnipileChat {
+  id: string
+  account_id: string
+  attendees?: UnipileAttendee[]
+}
+
+// Enviar mensaje a un chat conocido (directo, sin búsqueda)
+export async function sendMessageToChatId(chatId: string, text: string): Promise<boolean> {
+  try {
+    const res = await fetch(`${BASE_URL}/chats/${chatId}/messages`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify({ text }),
+    })
+
+    if (!res.ok) {
+      const errText = await res.text()
+      console.error(`[unipile] Error al enviar mensaje: ${errText}`)
+      return false
+    }
+
+    return true
+  } catch (err) {
+    console.error('[unipile] Error inesperado al enviar:', err)
+    return false
+  }
+}
+
+// Obtener detalles de un chat (attendees, etc.)
+export async function getChatDetails(chatId: string): Promise<UnipileChat | null> {
+  try {
+    const res = await fetch(`${BASE_URL}/chats/${chatId}`, { headers: getHeaders() })
+    if (!res.ok) return null
+    return await res.json() as UnipileChat
+  } catch {
+    return null
+  }
+}
+
+// Busca el chat_id paginando por el inbox (fallback si no tenemos chat_id guardado)
 async function findChatId(linkedinUrl: string): Promise<string | null> {
-  const username = extractUsername(linkedinUrl)
-  if (!username) return null
+  const match = linkedinUrl.match(/linkedin\.com\/in\/([^/?#]+)/)
+  if (!match) return null
+  const username = match[1].toLowerCase()
 
   let cursor: string | undefined
 
@@ -28,16 +70,10 @@ async function findChatId(linkedinUrl: string): Promise<string | null> {
     if (cursor) url.searchParams.set('cursor', cursor)
 
     const res = await fetch(url.toString(), { headers: getHeaders() })
-    if (!res.ok) {
-      console.error(`[unipile] Error al obtener chats: ${res.status}`)
-      break
-    }
+    if (!res.ok) break
 
     const data = await res.json() as {
-      items?: Array<{
-        id: string
-        attendees?: Array<{ identifier?: string; provider_id?: string }>
-      }>
+      items?: Array<{ id: string; attendees?: UnipileAttendee[] }>
       cursor?: string
     }
 
@@ -59,6 +95,7 @@ async function findChatId(linkedinUrl: string): Promise<string | null> {
   return null
 }
 
+// Enviar mensaje por LinkedIn URL (busca el chat_id si no lo tenemos)
 export async function sendLinkedinMessage(linkedinUrl: string, text: string): Promise<boolean> {
   try {
     const chatId = await findChatId(linkedinUrl)
@@ -66,20 +103,7 @@ export async function sendLinkedinMessage(linkedinUrl: string, text: string): Pr
       console.error(`[unipile] Chat no encontrado para: ${linkedinUrl}`)
       return false
     }
-
-    const res = await fetch(`${BASE_URL}/chats/${chatId}/messages`, {
-      method: 'POST',
-      headers: getHeaders(),
-      body: JSON.stringify({ text }),
-    })
-
-    if (!res.ok) {
-      const errText = await res.text()
-      console.error(`[unipile] Error al enviar mensaje: ${errText}`)
-      return false
-    }
-
-    return true
+    return sendMessageToChatId(chatId, text)
   } catch (err) {
     console.error('[unipile] Error inesperado:', err)
     return false
