@@ -53,6 +53,7 @@ export interface LinkedInProspect {
   ghl_appointment_id: string | null
   appointment_datetime: string | null
   status: ProspectStatus
+  agent_enabled: boolean | null
   created_at: string
   updated_at: string | null
   last_interaction_at: string | null

@@ -129,6 +129,18 @@ export async function POST(req: NextRequest) {
         .eq('id', prospectId)
     }
 
+    // Verificar si el agente está habilitado para este prospecto
+    const { data: prospectCheck } = await supabase
+      .from('linkedin_agent_prospects')
+      .select('agent_enabled')
+      .eq('id', prospectId)
+      .single()
+
+    if (prospectCheck?.agent_enabled === false) {
+      await logEvent(prospectId, 'agent_skipped', { reason: 'agent_disabled' })
+      return NextResponse.json({ success: true, skipped: true, reason: 'agent_disabled' })
+    }
+
     const agentResponse = await runAgent(prospectId, payload.message)
 
     if (agentResponse.message) {

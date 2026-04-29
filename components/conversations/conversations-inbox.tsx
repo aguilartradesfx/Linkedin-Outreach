@@ -6,7 +6,7 @@ import type { LinkedInProspect, LinkedInMessage } from '@/types/linkedin'
 import { ProspectStatusBadge } from '@/components/linkedin/status-badge'
 import {
   MessageSquare, ExternalLink, Search, Loader2, RefreshCw,
-  Building2, User, Bot,
+  Building2, User, Bot, BotOff,
 } from 'lucide-react'
 
 const supabase = createClient()
@@ -38,10 +38,36 @@ function formatDateTime(dt: string) {
 
 // ─── Chat view ────────────────────────────────────────────────────────────────
 
-function ChatView({ prospect }: { prospect: LinkedInProspect }) {
+function ChatView({
+  prospect,
+  onProspectUpdated,
+}: {
+  prospect: LinkedInProspect
+  onProspectUpdated: (p: LinkedInProspect) => void
+}) {
   const [messages, setMessages] = useState<LinkedInMessage[]>([])
   const [loading, setLoading] = useState(true)
+  const [togglingAgent, setTogglingAgent] = useState(false)
   const bottomRef = useRef<HTMLDivElement>(null)
+
+  const agentEnabled = prospect.agent_enabled !== false
+
+  async function toggleAgent() {
+    setTogglingAgent(true)
+    try {
+      const res = await fetch('/api/prospects', {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ id: prospect.id, agent_enabled: !agentEnabled }),
+      })
+      if (res.ok) {
+        const updated = await res.json()
+        onProspectUpdated(updated as LinkedInProspect)
+      }
+    } finally {
+      setTogglingAgent(false)
+    }
+  }
 
   useEffect(() => {
     setLoading(true)
@@ -101,7 +127,28 @@ function ChatView({ prospect }: { prospect: LinkedInProspect }) {
               )}
             </div>
           </div>
-          <ProspectStatusBadge status={prospect.status} />
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <ProspectStatusBadge status={prospect.status} />
+            <button
+              onClick={toggleAgent}
+              disabled={togglingAgent}
+              title={agentEnabled ? 'Agente activo — click para pausar' : 'Agente pausado — click para activar'}
+              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium border transition-all ${
+                agentEnabled
+                  ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400 hover:bg-red-500/10 hover:border-red-500/30 hover:text-red-400'
+                  : 'bg-red-500/10 border-red-500/30 text-red-400 hover:bg-emerald-500/10 hover:border-emerald-500/30 hover:text-emerald-400'
+              }`}
+            >
+              {togglingAgent ? (
+                <Loader2 size={10} className="animate-spin" />
+              ) : agentEnabled ? (
+                <Bot size={10} />
+              ) : (
+                <BotOff size={10} />
+              )}
+              {agentEnabled ? 'Agente activo' : 'Agente pausado'}
+            </button>
+          </div>
         </div>
 
         <div className="flex items-center gap-4 mt-3 text-xs text-white/30">
@@ -351,7 +398,17 @@ export function ConversationsInbox() {
               </button>
             </div>
             <div className="flex-1 overflow-hidden">
-              <ChatView prospect={selected} />
+              <ChatView
+                prospect={selected}
+                onProspectUpdated={(updated) => {
+                  setSelected(updated)
+                  setItems((prev) =>
+                    prev.map((item) =>
+                      item.prospect.id === updated.id ? { ...item, prospect: updated } : item
+                    )
+                  )
+                }}
+              />
             </div>
           </>
         ) : (
