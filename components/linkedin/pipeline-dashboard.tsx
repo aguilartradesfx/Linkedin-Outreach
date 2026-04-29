@@ -19,6 +19,8 @@ import {
   RefreshCw,
   Loader2,
   MessageSquare,
+  LayoutGrid,
+  List,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -62,6 +64,10 @@ function prospectName(p: LinkedInProspect) {
     p.full_name ??
     (`${p.first_name ?? ''} ${p.last_name ?? ''}`.trim() || 'Sin nombre')
   )
+}
+
+function getInitials(name: string) {
+  return name.split(' ').map((n) => n[0]).join('').toUpperCase().slice(0, 2)
 }
 
 function computeMetrics(prospects: LinkedInProspect[]) {
@@ -133,12 +139,93 @@ const TD = 'px-4 py-3'
 const ROW =
   'hover:bg-white/[0.03] cursor-pointer transition-colors border-b border-white/[0.04] last:border-0'
 
+// ─── Kanban ──────────────────────────────────────────────────────────────────
+
+const KANBAN_COLS: { status: string; label: string }[] = [
+  { status: 'nuevo',            label: 'Nuevo' },
+  { status: 'conexion_enviada', label: 'Solicitud enviada' },
+  { status: 'conectado',        label: 'Conectado' },
+  { status: 'conversando',      label: 'Conversando' },
+  { status: 'calificado',       label: 'Calificado' },
+  { status: 'agendado',         label: 'Agendado' },
+]
+
+function KanbanCard({ prospect, onClick }: { prospect: LinkedInProspect; onClick: () => void }) {
+  const name = prospectName(prospect)
+  return (
+    <div
+      onClick={onClick}
+      className="bg-white/[0.04] hover:bg-white/[0.07] border border-white/[0.08] hover:border-orange-500/20 rounded-xl p-3 cursor-pointer transition-all"
+    >
+      <div className="flex items-start justify-between gap-2">
+        <div className="flex items-center gap-2 min-w-0">
+          <div className="w-7 h-7 rounded-full bg-orange-500/10 border border-orange-500/20 flex items-center justify-center flex-shrink-0">
+            <span className="text-[9px] font-semibold text-orange-400">{getInitials(name)}</span>
+          </div>
+          <div className="min-w-0">
+            <p className="text-xs font-semibold text-white truncate">{name}</p>
+            <p className="text-[10px] text-white/40 truncate">{prospect.company_name ?? '—'}</p>
+          </div>
+        </div>
+        {prospect.icp_score !== null && (
+          <span className={`text-xs font-bold flex-shrink-0 tabular-nums ${icpColor(prospect.icp_score)}`}>
+            {prospect.icp_score}
+          </span>
+        )}
+      </div>
+      {prospect.position && (
+        <p className="text-[10px] text-white/30 mt-2 truncate">{truncate(prospect.position, 42)}</p>
+      )}
+    </div>
+  )
+}
+
+function KanbanBoard({
+  prospects,
+  onSelect,
+}: {
+  prospects: LinkedInProspect[]
+  onSelect: (p: LinkedInProspect) => void
+}) {
+  const byStatus = (status: string) => prospects.filter((p) => p.status === status)
+
+  return (
+    <div className="flex gap-3 overflow-x-auto pb-4 h-full" style={{ minHeight: 0 }}>
+      {KANBAN_COLS.map(({ status, label }) => {
+        const cards = byStatus(status)
+        return (
+          <div key={status} className="flex flex-col flex-shrink-0 w-60">
+            <div className="flex items-center justify-between mb-2 px-1">
+              <span className="text-xs font-medium text-white/60">{label}</span>
+              <span className="text-[10px] bg-white/[0.07] text-white/40 px-1.5 py-0.5 rounded-full tabular-nums">
+                {cards.length}
+              </span>
+            </div>
+            <div className="flex flex-col gap-2 overflow-y-auto flex-1" style={{ maxHeight: 'calc(100vh - 280px)' }}>
+              {cards.length === 0 ? (
+                <div className="border border-dashed border-white/[0.06] rounded-xl p-4 text-center">
+                  <p className="text-[10px] text-white/20">Sin prospectos</p>
+                </div>
+              ) : (
+                cards.map((p) => (
+                  <KanbanCard key={p.id} prospect={p} onClick={() => onSelect(p)} />
+                ))
+              )}
+            </div>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
 // ─── Main component ──────────────────────────────────────────────────────────
 
 export function PipelineDashboard() {
   const [prospects, setProspects] = useState<LinkedInProspect[]>([])
   const [loading, setLoading] = useState(true)
   const [selectedProspect, setSelectedProspect] = useState<LinkedInProspect | null>(null)
+  const [viewMode, setViewMode] = useState<'kanban' | 'list'>('kanban')
   const [activeTab, setActiveTab] = useState('agendadas')
   const [searchQuery, setSearchQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState<string>('all')
@@ -253,22 +340,49 @@ export function PipelineDashboard() {
   ]
 
   return (
-    <div className="p-4 md:p-8 max-w-7xl">
+    <div className="p-4 md:p-6 w-full h-full flex flex-col">
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center justify-between mb-5 flex-shrink-0">
         <div>
           <h1 className="text-xl font-semibold text-white">LinkedIn Pipeline</h1>
           <p className="text-sm text-white/40 mt-0.5">
             {loading ? 'Cargando...' : `${metrics.total} prospecto(s)`}
           </p>
         </div>
-        <button
-          onClick={fetchProspects}
-          className="flex items-center gap-2 px-3 py-2 text-sm text-white/40 hover:text-white/70 border border-white/10 rounded-lg hover:border-white/20 transition-colors"
-        >
-          <RefreshCw size={13} />
-          Refrescar
-        </button>
+        <div className="flex items-center gap-2">
+          {/* View toggle */}
+          <div className="flex items-center bg-white/[0.05] border border-white/10 rounded-lg p-0.5">
+            <button
+              onClick={() => setViewMode('kanban')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
+                viewMode === 'kanban'
+                  ? 'bg-orange-500/20 text-orange-400 border border-orange-500/30'
+                  : 'text-white/40 hover:text-white/70'
+              }`}
+            >
+              <LayoutGrid size={12} />
+              Kanban
+            </button>
+            <button
+              onClick={() => setViewMode('list')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
+                viewMode === 'list'
+                  ? 'bg-orange-500/20 text-orange-400 border border-orange-500/30'
+                  : 'text-white/40 hover:text-white/70'
+              }`}
+            >
+              <List size={12} />
+              Lista
+            </button>
+          </div>
+          <button
+            onClick={fetchProspects}
+            className="flex items-center gap-2 px-3 py-2 text-sm text-white/40 hover:text-white/70 border border-white/10 rounded-lg hover:border-white/20 transition-colors"
+          >
+            <RefreshCw size={13} />
+            Refrescar
+          </button>
+        </div>
       </div>
 
       {/* Metric cards */}
@@ -324,7 +438,15 @@ export function PipelineDashboard() {
         </div>
       )}
 
-      {/* Tabs */}
+      {/* Kanban view */}
+      {viewMode === 'kanban' && !loading && (
+        <div className="flex-1 overflow-hidden">
+          <KanbanBoard prospects={prospects} onSelect={setSelectedProspect} />
+        </div>
+      )}
+
+      {/* List view — tabs */}
+      {viewMode === 'list' && (
       <TabsPrimitive.Root value={activeTab} onValueChange={setActiveTab}>
         <TabsPrimitive.List className="flex border-b border-white/[0.06] mb-5 overflow-x-auto">
           {TABS.map(({ value, label, count }) => (
@@ -632,6 +754,7 @@ export function PipelineDashboard() {
           <EventsLogView />
         </TabsPrimitive.Content>
       </TabsPrimitive.Root>
+      )} {/* end list view */}
 
       {/* Detail panel */}
       {selectedProspect && (
