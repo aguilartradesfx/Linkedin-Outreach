@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server'
 
-// GET /api/unipile/test — muestra los últimos chats de Unipile para diagnóstico
 export async function GET() {
   const BASE_URL = `https://${process.env.UNIPILE_DSN}/api/v1`
   const headers = {
@@ -9,45 +8,35 @@ export async function GET() {
   }
 
   try {
-    // 1. Verificar que la cuenta está activa
-    const accountRes = await fetch(
-      `${BASE_URL}/accounts/${process.env.UNIPILE_ACCOUNT_ID}`,
-      { headers }
-    )
-    const account = await accountRes.json()
-
-    // 2. Obtener los últimos 5 chats
+    // 1. Últimos 3 chats
     const chatsRes = await fetch(
-      `${BASE_URL}/chats?account_id=${process.env.UNIPILE_ACCOUNT_ID}&limit=5`,
+      `${BASE_URL}/chats?account_id=${process.env.UNIPILE_ACCOUNT_ID}&limit=3`,
       { headers }
     )
     const chats = await chatsRes.json()
+    const firstChatId = chats?.items?.[0]?.id
 
-    // 3. Obtener el último mensaje del primer chat (si existe)
+    // 2. Detalle completo del primer chat (con attendees)
+    let chatDetail = null
+    if (firstChatId) {
+      const detailRes = await fetch(`${BASE_URL}/chats/${firstChatId}`, { headers })
+      chatDetail = await detailRes.json()
+    }
+
+    // 3. Último mensaje del primer chat
     let latestMessage = null
-    const firstChat = chats?.items?.[0]
-    if (firstChat?.id) {
-      const msgsRes = await fetch(
-        `${BASE_URL}/chats/${firstChat.id}/messages?limit=1`,
-        { headers }
-      )
+    if (firstChatId) {
+      const msgsRes = await fetch(`${BASE_URL}/chats/${firstChatId}/messages?limit=1`, { headers })
       const msgs = await msgsRes.json()
       latestMessage = msgs?.items?.[0] ?? null
     }
 
     return NextResponse.json({
-      account_status: account?.sources?.[0]?.status ?? 'unknown',
-      account_name: account?.name,
-      account_type: account?.type,
-      total_chats_fetched: chats?.items?.length ?? 0,
-      first_chat: firstChat ? {
-        id: firstChat.id,
-        attendees: firstChat.attendees,
-      } : null,
-      latest_message_in_first_chat: latestMessage,
+      chat_list_raw: chats?.items?.map((c: Record<string, unknown>) => ({ id: c.id, keys: Object.keys(c) })),
+      chat_detail_full: chatDetail,
+      latest_message_full: latestMessage,
     })
   } catch (err) {
-    const error = err as Error
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    return NextResponse.json({ error: (err as Error).message }, { status: 500 })
   }
 }

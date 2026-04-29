@@ -50,9 +50,11 @@ export async function POST(req: NextRequest) {
     const data = (body.data ?? body.message ?? body.object ?? body) as Record<string, unknown>
     const chatId = (data.chat_id ?? data.chatId ?? data.thread_id ?? body.chat_id) as string | undefined
     const messageText = ((data.text ?? data.content ?? data.body ?? data.message ?? '') as string).trim()
-    const isSelf = Boolean(data.is_self ?? data.from_me ?? data.sender_is_self ?? false)
+    // Unipile usa is_sender:1 para mensajes propios, is_sender:0 para del prospecto
+    const isSenderVal = data.is_sender ?? data.is_self ?? data.from_me ?? data.sender_is_self
+    const isSelf = isSenderVal === 1 || isSenderVal === true
 
-    console.log('[unipile/webhook] parsed — chatId:', chatId, '| text:', messageText?.slice(0, 50), '| isSelf:', isSelf)
+    console.log('[unipile/webhook] parsed — chatId:', chatId, '| text:', messageText?.slice(0, 50), '| isSelf:', isSelf, '| is_sender raw:', isSenderVal)
 
     if (!chatId || !messageText) {
       console.log('[unipile/webhook] skipping: sin chat_id o texto')
