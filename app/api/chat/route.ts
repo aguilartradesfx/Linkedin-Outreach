@@ -4,6 +4,7 @@ import { supabase } from '@/lib/clients/supabase'
 import { runAgent } from '@/lib/agent'
 import { validateWebhookSignature } from '@/lib/utils/webhook-validator'
 import { logEvent } from '@/lib/utils/logger'
+import { sendLinkedinMessage } from '@/lib/clients/unipile'
 
 const rateLimitMap = new Map<string, number[]>()
 const RATE_LIMIT_WINDOW_MS = 60 * 1000
@@ -129,6 +130,13 @@ export async function POST(req: NextRequest) {
     }
 
     const agentResponse = await runAgent(prospectId, payload.message)
+
+    if (agentResponse.message) {
+      const sent = await sendLinkedinMessage(payload.contactLinkedinUrl, agentResponse.message)
+      await logEvent(prospectId, sent ? 'unipile_message_sent' : 'unipile_send_failed', {
+        linkedin_url: payload.contactLinkedinUrl,
+      })
+    }
 
     return NextResponse.json({ success: true, response: agentResponse })
   } catch (err) {

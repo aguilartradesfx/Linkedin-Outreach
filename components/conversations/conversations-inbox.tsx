@@ -47,15 +47,13 @@ function ChatView({ prospect }: { prospect: LinkedInProspect }) {
     setLoading(true)
     setMessages([])
 
-    supabase
-      .from('linkedin_agent_messages')
-      .select('*')
-      .eq('prospect_id', prospect.id)
-      .order('turn_number', { ascending: true })
-      .then(({ data }) => {
-        if (data) setMessages(data as LinkedInMessage[])
+    fetch(`/api/messages?prospect_id=${prospect.id}`)
+      .then((r) => r.json())
+      .then((data) => {
+        if (Array.isArray(data)) setMessages(data as LinkedInMessage[])
         setLoading(false)
       })
+      .catch(() => setLoading(false))
 
     const channel = supabase
       .channel(`chat-${prospect.id}`)
@@ -205,19 +203,18 @@ export function ConversationsInbox() {
   const [search, setSearch] = useState('')
 
   const fetchInbox = useCallback(async () => {
-    const [{ data: prospects }, { data: messages }] = await Promise.all([
-      supabase
-        .from('linkedin_agent_prospects')
-        .select('*')
-        .order('last_interaction_at', { ascending: false, nullsFirst: false }),
-      supabase
-        .from('linkedin_agent_messages')
-        .select('prospect_id, content, role, created_at')
-        .order('created_at', { ascending: false })
-        .limit(500), // DESC order → first hit per prospect_id = latest message
-    ])
+    try {
+      const [prospectsRes, messagesRes] = await Promise.all([
+        fetch('/api/prospects'),
+        fetch('/api/messages?limit=500'),
+      ])
 
-    if (!prospects || !messages) { setLoading(false); return }
+      if (!prospectsRes.ok || !messagesRes.ok) { setLoading(false); return }
+
+      const prospects: LinkedInProspect[] = await prospectsRes.json()
+      const messages: Array<{ prospect_id: string; content: string; role: string; created_at: string }> = await messagesRes.json()
+
+      if (!Array.isArray(prospects) || !Array.isArray(messages)) { setLoading(false); return }
 
     // Build map: prospect_id → last message (first seen = latest, since sorted DESC)
     const lastMsgMap = new Map<string, { content: string; role: string; created_at: string }>()
@@ -242,8 +239,12 @@ export function ConversationsInbox() {
       })
       .sort((a, b) => new Date(b.lastMessageAt).getTime() - new Date(a.lastMessageAt).getTime())
 
-    setItems(inbox)
-    setLoading(false)
+      setItems(inbox)
+    } catch (err) {
+      console.error('[inbox] Error al cargar:', err)
+    } finally {
+      setLoading(false)
+    }
   }, [])
 
   useEffect(() => {
@@ -252,7 +253,11 @@ export function ConversationsInbox() {
     const channel = supabase
       .channel('inbox-realtime')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'linkedin_agent_messages' }, fetchInbox)
-      .subscribe()
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'linkedin_agent_prospects' }, fetchInbox)
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') console.log('[realtime] inbox: conectado')
+        if (status === 'CHANNEL_ERROR') console.error('[realtime] inbox: error de canal')
+      })
 
     return () => { supabase.removeChannel(channel) }
   }, [fetchInbox])

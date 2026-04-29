@@ -146,13 +146,17 @@ export function PipelineDashboard() {
   const initialLoad = useRef(true)
 
   const fetchProspects = useCallback(async () => {
-    const { data } = await supabase
-      .from('linkedin_agent_prospects')
-      .select('*')
-      .order('created_at', { ascending: false })
-    if (data) setProspects(data as LinkedInProspect[])
-    setLoading(false)
-    initialLoad.current = false
+    try {
+      const res = await fetch('/api/prospects')
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      const data = await res.json()
+      if (Array.isArray(data)) setProspects(data as LinkedInProspect[])
+    } catch (err) {
+      console.error('[pipeline] Error al cargar prospectos:', err)
+    } finally {
+      setLoading(false)
+      initialLoad.current = false
+    }
   }, [])
 
   useEffect(() => {
@@ -163,11 +167,13 @@ export function PipelineDashboard() {
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'linkedin_agent_prospects' },
-        () => {
-          fetchProspects()
-        },
+        () => { fetchProspects() },
       )
-      .subscribe()
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') console.log('[realtime] prospects: conectado')
+        if (status === 'CHANNEL_ERROR') console.error('[realtime] prospects: error de canal')
+        if (status === 'TIMED_OUT') console.warn('[realtime] prospects: timeout')
+      })
 
     return () => {
       supabase.removeChannel(channel)
