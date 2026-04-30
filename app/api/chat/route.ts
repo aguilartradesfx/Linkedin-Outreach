@@ -10,6 +10,7 @@ import { logEvent } from '@/lib/utils/logger'
 const EVENT_STATUS: Record<string, string> = {
   LEAD_INVITATION_SENT:     'conexion_enviada',
   LEAD_INVITATION_ACCEPTED: 'conectado',
+  LEAD_MESSAGE_SENT:        'mensaje_inicial_enviado',
   LEAD_MESSAGE_REPLIED:     'conversando',
 }
 
@@ -65,8 +66,9 @@ export async function POST(req: NextRequest) {
       .eq('linkedin_url', contactLinkedinUrl)
       .maybeSingle()
 
-    // Only create a new prospect record on invitation sent (first meaningful action)
-    if (!existing && eventType !== 'LEAD_INVITATION_SENT') {
+    // Create prospect on invitation sent OR on first message sent (in case invitation event was missed)
+    const canCreateProspect = ['LEAD_INVITATION_SENT', 'LEAD_MESSAGE_SENT'].includes(eventType)
+    if (!existing && !canCreateProspect) {
       console.log('[api/chat] Prospecto no encontrado, skipping para:', eventType)
       return NextResponse.json({ ok: true, skipped: 'prospect_not_found' })
     }
@@ -75,6 +77,7 @@ export async function POST(req: NextRequest) {
 
     if (!existing) {
       const nameParts = contactName.trim().split(' ')
+      const initialStatus = eventType === 'LEAD_MESSAGE_SENT' ? 'mensaje_inicial_enviado' : 'conexion_enviada'
       const { data: created, error } = await supabase
         .from('linkedin_agent_prospects')
         .insert({
@@ -85,7 +88,7 @@ export async function POST(req: NextRequest) {
           company_name: payload.contactCompany || null,
           email: payload.contactEmails[0] ?? null,
           phone: payload.contactPhones[0] ?? null,
-          status: 'conexion_enviada',
+          status: initialStatus,
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
           last_interaction_at: new Date().toISOString(),
