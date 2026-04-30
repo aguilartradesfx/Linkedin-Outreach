@@ -6,6 +6,7 @@ import { useSearchParams } from 'next/navigation'
 import {
   Plus, X, ChevronDown, Loader2, ClipboardList,
   Building2, Mail, Phone, MessageSquare, Trash2,
+  Sparkles, ExternalLink, Copy, Check,
 } from 'lucide-react'
 import type { ProposalRequest, ProposalStatus, ProposalPriority } from '@/types/proposals'
 import {
@@ -52,6 +53,10 @@ function DetailPanel({ proposal, onClose, onUpdated, onDeleted }: DetailPanelPro
   const [internalNotes, setInternalNotes] = useState(proposal.internal_notes ?? '')
   const [saving, setSaving] = useState(false)
   const [deleting, setDeleting] = useState(false)
+  const [generating, setGenerating] = useState(false)
+  const [generateError, setGenerateError] = useState<string | null>(null)
+  const [generatedUrl, setGeneratedUrl] = useState<string | null>(proposal.generated_url ?? null)
+  const [copied, setCopied] = useState(false)
 
   async function save(patch: Partial<ProposalRequest>) {
     setSaving(true)
@@ -73,6 +78,34 @@ function DetailPanel({ proposal, onClose, onUpdated, onDeleted }: DetailPanelPro
     const res = await fetch(`/api/proposals/${proposal.id}`, { method: 'DELETE' })
     if (res.ok) onDeleted(proposal.id)
     setDeleting(false)
+  }
+
+  async function handleGenerate() {
+    if (!confirm(generatedUrl
+      ? '¿Volver a enviar la propuesta? Se reemplazará la página actual.'
+      : '¿Enviar propuesta? Esto puede tardar unos segundos.')) return
+    setGenerating(true)
+    setGenerateError(null)
+    const res = await fetch('/api/proposals/generate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ proposal_id: proposal.id }),
+    })
+    const data = await res.json()
+    if (res.ok) {
+      setGeneratedUrl(data.url)
+      onUpdated({ ...proposal, generated_url: data.url, generated_at: new Date().toISOString(), status: 'propuesta_enviada' })
+    } else {
+      setGenerateError(data.error ?? 'Error al generar la propuesta')
+    }
+    setGenerating(false)
+  }
+
+  async function handleCopyUrl() {
+    if (!generatedUrl) return
+    await navigator.clipboard.writeText(generatedUrl)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
   }
 
   return (
@@ -184,6 +217,36 @@ function DetailPanel({ proposal, onClose, onUpdated, onDeleted }: DetailPanelPro
 
         {/* Footer actions */}
         <div className="p-4 border-t border-white/[0.08] space-y-2.5 flex-shrink-0">
+          {/* Generated URL pill */}
+          {generatedUrl && (
+            <div className="flex items-center gap-2 px-3 py-2 bg-emerald-500/5 border border-emerald-500/15 rounded-lg">
+              <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 flex-shrink-0" />
+              <span className="text-xs text-emerald-300/80 truncate flex-1 min-w-0">{generatedUrl}</span>
+              <button onClick={handleCopyUrl} className="text-white/30 hover:text-white/60 transition-colors flex-shrink-0" title="Copiar enlace">
+                {copied ? <Check size={13} className="text-emerald-400" /> : <Copy size={13} />}
+              </button>
+              <a href={generatedUrl} target="_blank" rel="noopener noreferrer" className="text-white/30 hover:text-orange-400 transition-colors flex-shrink-0" title="Abrir propuesta">
+                <ExternalLink size={13} />
+              </a>
+            </div>
+          )}
+
+          {/* Generate button */}
+          <button
+            onClick={handleGenerate}
+            disabled={generating}
+            className="w-full flex items-center justify-center gap-2 py-2.5 text-sm font-medium bg-orange-500 hover:bg-orange-600 disabled:bg-orange-500/50 text-white rounded-lg transition-colors"
+          >
+            {generating ? (
+              <><Loader2 size={14} className="animate-spin" />Enviando propuesta...</>
+            ) : (
+              <><Sparkles size={14} />{generatedUrl ? 'Reenviar propuesta' : 'Enviar propuesta'}</>
+            )}
+          </button>
+          {generateError && (
+            <p className="text-xs text-red-400 text-center">{generateError}</p>
+          )}
+
           <div className="grid grid-cols-2 gap-2">
             <div className="relative">
               <select

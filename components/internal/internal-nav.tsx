@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import {
   FileText, Users, LogOut, Menu, X, Network,
-  LayoutDashboard, ClipboardList, MessageCircle, UserCog,
+  LayoutDashboard, ClipboardList, MessageCircle, UserCog, FileOutput,
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { useState } from 'react'
@@ -24,6 +24,7 @@ const NAV_ITEMS: NavItem[] = [
   { href: '/contratos',         label: 'Contratos',        icon: FileText,        permission: 'can_view_contracts' },
   { href: '/clientes',          label: 'Clientes',         icon: Users,           permission: 'can_view_clients' },
   { href: '/solicitudes',       label: 'Solicitudes',      icon: ClipboardList,   permission: 'can_submit_proposals' },
+  { href: '/propuestas',        label: 'Propuestas',       icon: FileOutput,      permission: 'can_view_proposals' },
   { href: '/conversaciones',    label: 'Conversaciones',   icon: MessageCircle,   permission: 'can_view_linkedin' },
   { href: '/linkedin-pipeline', label: 'LinkedIn Pipeline',icon: Network,         permission: 'can_view_linkedin' },
   { href: '/usuarios',          label: 'Usuarios',         icon: UserCog,         permission: 'is_admin' },

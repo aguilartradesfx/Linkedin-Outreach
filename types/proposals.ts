@@ -49,6 +49,8 @@ export interface ProposalRequest {
   status: ProposalStatus
   priority: ProposalPriority
   internal_notes: string | null
+  generated_url: string | null
+  generated_at: string | null
   created_at: string
   updated_at: string
 }
