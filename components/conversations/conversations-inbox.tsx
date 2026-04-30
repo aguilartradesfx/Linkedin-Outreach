@@ -88,6 +88,11 @@ function ChatView({
         { event: 'INSERT', schema: 'public', table: 'linkedin_agent_messages', filter: `prospect_id=eq.${prospect.id}` },
         (payload) => setMessages((prev) => [...prev, payload.new as LinkedInMessage]),
       )
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'linkedin_agent_prospects', filter: `id=eq.${prospect.id}` },
+        (payload) => onProspectUpdated(payload.new as LinkedInProspect),
+      )
       .subscribe()
 
     return () => { supabase.removeChannel(channel) }
@@ -173,57 +178,70 @@ function ChatView({
             <p className="text-sm text-white/30">Sin mensajes registrados</p>
           </div>
         ) : (
-          messages.map((msg) => {
-            if (msg.role === 'system') {
-              return (
-                <div key={msg.id} className="flex justify-center">
-                  <span className="text-[10px] text-white/25 bg-white/5 px-3 py-1 rounded-full max-w-xs text-center">
-                    {msg.content}
-                  </span>
-                </div>
-              )
-            }
-            const isAgent = msg.role === 'agent'
-            return (
-              <div key={msg.id} className={`flex ${isAgent ? 'justify-end' : 'justify-start'}`}>
-                {!isAgent && (
-                  <div className="w-6 h-6 rounded-full bg-white/5 border border-white/10 flex items-center justify-center mr-2 flex-shrink-0 self-end mb-1">
-                    <span className="text-[9px] text-white/40">{getInitials(name)}</span>
+          (() => {
+            const lastAgentIdx = messages.reduce((acc, m, i) => m.role === 'agent' ? i : acc, -1)
+            const isRead = prospect.last_read_at != null && lastAgentIdx >= 0 &&
+              new Date(prospect.last_read_at) >= new Date(messages[lastAgentIdx].created_at)
+
+            return messages.map((msg, idx) => {
+              if (msg.role === 'system') {
+                return (
+                  <div key={msg.id} className="flex justify-center">
+                    <span className="text-[10px] text-white/25 bg-white/5 px-3 py-1 rounded-full max-w-xs text-center">
+                      {msg.content}
+                    </span>
                   </div>
-                )}
-                <div>
-                  {isAgent && (
-                    <div className="flex items-center gap-1 justify-end mb-1">
-                      <Bot size={10} className="text-orange-400/60" />
-                      <span className="text-[10px] text-orange-400/60">Agente</span>
+                )
+              }
+              const isAgent = msg.role === 'agent'
+              return (
+                <div key={msg.id} className="flex flex-col">
+                  <div className={`flex ${isAgent ? 'justify-end' : 'justify-start'}`}>
+                    {!isAgent && (
+                      <div className="w-6 h-6 rounded-full bg-white/5 border border-white/10 flex items-center justify-center mr-2 flex-shrink-0 self-end mb-1">
+                        <span className="text-[9px] text-white/40">{getInitials(name)}</span>
+                      </div>
+                    )}
+                    <div>
+                      {isAgent && (
+                        <div className="flex items-center gap-1 justify-end mb-1">
+                          <Bot size={10} className="text-orange-400/60" />
+                          <span className="text-[10px] text-orange-400/60">Agente</span>
+                        </div>
+                      )}
+                      {!isAgent && (
+                        <p className="text-[10px] text-white/30 mb-1 ml-0.5">{name}</p>
+                      )}
+                      <div
+                        className={`max-w-[80%] rounded-2xl px-4 py-2.5 ${
+                          isAgent
+                            ? 'bg-orange-500/15 border border-orange-500/20 rounded-tr-sm'
+                            : 'bg-white/[0.06] border border-white/[0.08] rounded-tl-sm'
+                        }`}
+                      >
+                        <p className="text-sm text-white/90 leading-relaxed whitespace-pre-wrap">
+                          {msg.content}
+                        </p>
+                        <p className="text-[10px] text-white/20 mt-1 text-right">
+                          {formatDateTime(msg.created_at)}
+                        </p>
+                      </div>
+                    </div>
+                    {isAgent && (
+                      <div className="w-6 h-6 rounded-full bg-orange-500/10 border border-orange-500/20 flex items-center justify-center ml-2 flex-shrink-0 self-end mb-1">
+                        <Bot size={10} className="text-orange-400" />
+                      </div>
+                    )}
+                  </div>
+                  {isAgent && idx === lastAgentIdx && isRead && (
+                    <div className="flex justify-end mr-9 mt-0.5">
+                      <span className="text-[10px] text-white/30">Leído</span>
                     </div>
                   )}
-                  {!isAgent && (
-                    <p className="text-[10px] text-white/30 mb-1 ml-0.5">{name}</p>
-                  )}
-                  <div
-                    className={`max-w-[80%] rounded-2xl px-4 py-2.5 ${
-                      isAgent
-                        ? 'bg-orange-500/15 border border-orange-500/20 rounded-tr-sm'
-                        : 'bg-white/[0.06] border border-white/[0.08] rounded-tl-sm'
-                    }`}
-                  >
-                    <p className="text-sm text-white/90 leading-relaxed whitespace-pre-wrap">
-                      {msg.content}
-                    </p>
-                    <p className="text-[10px] text-white/20 mt-1 text-right">
-                      {formatDateTime(msg.created_at)}
-                    </p>
-                  </div>
                 </div>
-                {isAgent && (
-                  <div className="w-6 h-6 rounded-full bg-orange-500/10 border border-orange-500/20 flex items-center justify-center ml-2 flex-shrink-0 self-end mb-1">
-                    <Bot size={10} className="text-orange-400" />
-                  </div>
-                )}
-              </div>
-            )
-          })
+              )
+            })
+          })()
         )}
         <div ref={bottomRef} />
       </div>

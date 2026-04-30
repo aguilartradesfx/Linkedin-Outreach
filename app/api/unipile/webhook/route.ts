@@ -28,10 +28,28 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true, skipped: 'invalid_json' })
   }
 
-  // Log completo para diagnóstico
   console.log('[unipile/webhook] RAW:', JSON.stringify(body))
 
   try {
+    const eventType = (body.event ?? body.event_type ?? 'message_received') as string
+
+    // Handle message_read: mark prospect's messages as read
+    if (eventType === 'message_read') {
+      const chatId = (body.chat_id ?? (body.data as Record<string, unknown>)?.chat_id) as string | undefined
+      if (chatId) {
+        await supabase
+          .from('linkedin_agent_prospects')
+          .update({ last_read_at: new Date().toISOString() })
+          .eq('unipile_chat_id', chatId)
+        console.log('[unipile/webhook] message_read for chat:', chatId)
+      }
+      return NextResponse.json({ ok: true, event: 'message_read' })
+    }
+
+    if (eventType === 'message_delivered') {
+      return NextResponse.json({ ok: true, event: 'message_delivered' })
+    }
+
     // Unipile envía el mensaje en body.data o directamente en body
     const msg = (body.data ?? body) as Record<string, unknown>
 

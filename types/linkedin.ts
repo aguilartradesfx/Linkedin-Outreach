@@ -55,6 +55,7 @@ export interface LinkedInProspect {
   status: ProspectStatus
   agent_enabled: boolean | null
   unipile_chat_id: string | null
+  last_read_at: string | null
   created_at: string
   updated_at: string | null
   last_interaction_at: string | null
