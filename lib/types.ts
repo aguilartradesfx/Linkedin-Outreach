@@ -69,7 +69,7 @@ export interface Message {
 }
 
 export interface AgentResponse {
-  message: string;
+  message: string | null;
   prospectId: string;
   status: string;
 }

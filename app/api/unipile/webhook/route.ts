@@ -5,6 +5,9 @@ import { logEvent } from '@/lib/utils/logger'
 import { getChatDetails, getLinkedinIdentifier, sendMessageToChatId } from '@/lib/clients/unipile'
 
 const rateLimitMap = new Map<string, number[]>()
+// In-memory dedup for same-instance retries. Cross-instance retries are rare
+// now that we return 200, but this catches same-instance double-fires.
+const processedMessageIds = new Map<string, number>()
 
 function checkRateLimit(chatId: string): boolean {
   const now = Date.now()
@@ -13,6 +16,17 @@ function checkRateLimit(chatId: string): boolean {
   timestamps.push(now)
   rateLimitMap.set(chatId, timestamps)
   return true
+}
+
+function isDuplicateMessageId(messageId: string): boolean {
+  const now = Date.now()
+  // Evict entries older than 5 minutes
+  for (const [id, ts] of processedMessageIds) {
+    if (now - ts > 300_000) processedMessageIds.delete(id)
+  }
+  if (processedMessageIds.has(messageId)) return true
+  processedMessageIds.set(messageId, now)
+  return false
 }
 
 export async function GET() {
@@ -54,12 +68,13 @@ export async function POST(req: NextRequest) {
     const msg = (body.data ?? body) as Record<string, unknown>
 
     const chatId = (msg.chat_id ?? msg.chatId) as string | undefined
+    const messageId = (msg.message_id ?? msg.id) as string | undefined
     // Unipile sends message text in body.message (not body.text)
     const messageText = ((msg.text ?? msg.content ?? msg.message ?? '') as string).trim()
     // is_sender:1/true = our message, is_sender:0/false = prospect's message
     const isSelf = msg.is_sender === 1 || msg.is_sender === true || msg.from_me === true
 
-    console.log('[unipile/webhook] chatId:', chatId, '| text:', messageText?.slice(0, 60), '| isSelf:', isSelf)
+    console.log('[unipile/webhook] chatId:', chatId, '| messageId:', messageId, '| text:', messageText?.slice(0, 60), '| isSelf:', isSelf)
 
     if (!chatId || !messageText) {
       return NextResponse.json({ ok: true, skipped: 'missing_data' })
@@ -67,6 +82,12 @@ export async function POST(req: NextRequest) {
 
     if (isSelf) {
       return NextResponse.json({ ok: true, skipped: 'self_message' })
+    }
+
+    // Fix C: dedup — Unipile may retry the same webhook on transient errors
+    if (messageId && isDuplicateMessageId(messageId)) {
+      console.log('[unipile/webhook] Dedup: messageId ya procesado:', messageId)
+      return NextResponse.json({ ok: true, skipped: 'duplicate' })
     }
 
     if (!checkRateLimit(chatId)) {

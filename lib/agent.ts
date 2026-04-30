@@ -6,7 +6,7 @@ import { toolDefinitions, executeTool } from './tools/index';
 import { logEvent } from './utils/logger';
 import type { AgentResponse, Message } from './types';
 
-const MAX_TOOL_ITERATIONS = 8;
+const MAX_TOOL_ITERATIONS = 12;
 const MODEL = 'claude-sonnet-4-6';
 
 async function getSystemPrompt(): Promise<string> {
@@ -80,7 +80,11 @@ export async function runAgent(
     iterations++;
 
     if (response.stop_reason === 'end_turn') {
-      finalText = extractText(response.content);
+      // Fix A: only overwrite finalText if the end_turn response has actual text.
+      // An empty end_turn after tool_use means the model already produced its text
+      // as partialText in a prior tool_use response — preserve that.
+      const endText = extractText(response.content);
+      if (endText) finalText = endText;
       break;
     }
 
@@ -89,7 +93,7 @@ export async function runAgent(
         (b): b is Anthropic.ToolUseBlock => b.type === 'tool_use'
       );
 
-      // Guardar texto parcial si existe
+      // Capture any text the model produced alongside the tool call
       const partialText = extractText(response.content);
       if (partialText) finalText = partialText;
 
@@ -105,29 +109,49 @@ export async function runAgent(
         });
       }
 
-      // Agregar respuesta del asistente y los resultados al historial
       claudeMessages.push({ role: 'assistant', content: response.content });
       claudeMessages.push({ role: 'user', content: toolResults });
 
+      // Fix A: on the last available iteration, force text output so the model
+      // can't burn the final slot on another tool call without producing a reply.
+      const forceText = iterations >= MAX_TOOL_ITERATIONS - 1;
       response = await anthropic.messages.create({
         model: MODEL,
         system: systemWithContext,
         messages: claudeMessages,
         tools: toolDefinitions,
+        ...(forceText ? { tool_choice: { type: 'none' as const } } : {}),
         max_tokens: 1024,
       });
 
       continue;
     }
 
-    // Cualquier otro stop_reason: salir
-    finalText = extractText(response.content);
+    // Any other stop_reason (max_tokens, etc.): capture whatever text exists
+    const otherText = extractText(response.content);
+    if (otherText) finalText = otherText;
     break;
   }
 
-  // Si se agotaron las iteraciones, usar el último texto disponible
+  // Post-loop: try one last extract from the final response
   if (!finalText) {
-    finalText = extractText(response.content) || 'Disculpa, hubo un problema al procesar tu mensaje.';
+    const lastText = extractText(response.content);
+    if (lastText) finalText = lastText;
+  }
+
+  // Fix D: if still no text, log for manual review and return null — do NOT
+  // send a generic fallback string to the prospect.
+  if (!finalText) {
+    await logEvent(prospectId, 'agent_no_response', {
+      iterations,
+      last_stop_reason: response.stop_reason,
+    });
+    const { data: prospectRow } = await supabase
+      .from('linkedin_agent_prospects')
+      .select('status')
+      .eq('id', prospectId)
+      .single();
+    return { message: null, prospectId, status: prospectRow?.status ?? 'conversando' };
   }
 
   // Guardar respuesta del agente
@@ -141,7 +165,6 @@ export async function runAgent(
     created_at: new Date().toISOString(),
   });
 
-  // Obtener status actual del prospecto
   const { data: prospect } = await supabase
     .from('linkedin_agent_prospects')
     .select('status')
