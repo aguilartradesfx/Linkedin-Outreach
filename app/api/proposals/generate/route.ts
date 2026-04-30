@@ -251,9 +251,10 @@ export async function POST(request: Request) {
       'x-api-key': proposalsApiKey,
     },
     body: JSON.stringify({
-      html,
+      html_content: html,
       client_name: proposal.client_name,
-      client_company: proposal.client_company ?? null,
+      project_name: proposal.client_company ?? proposal.client_name,
+      created_by: user.email ?? 'admin',
     }),
   })
 
