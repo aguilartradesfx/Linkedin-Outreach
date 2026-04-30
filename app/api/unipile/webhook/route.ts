@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabase } from '@/lib/clients/supabase'
-import { runAgent } from '@/lib/agent'
 import { logEvent } from '@/lib/utils/logger'
-import { getChatDetails, getLinkedinIdentifier, sendMessageToChatId } from '@/lib/clients/unipile'
+import { getChatDetails, getLinkedinIdentifier } from '@/lib/clients/unipile'
 
 const rateLimitMap = new Map<string, number[]>()
 // In-memory dedup for same-instance retries. Cross-instance retries are rare
@@ -187,19 +186,21 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: true, skipped: 'agent_disabled' })
     }
 
-    // Correr el agente
-    console.log('[unipile/webhook] Corriendo agente...')
-    const agentResponse = await runAgent(prospectId, messageText)
-    console.log('[unipile/webhook] Respuesta:', agentResponse.message?.slice(0, 100))
+    // Encolar con delay de 5-10 min para simular tiempo de respuesta humano
+    const delayMin = 5 + Math.random() * 5 // 5-10 min
+    const processAfter = new Date(Date.now() + delayMin * 60_000).toISOString()
 
-    // Enviar respuesta directamente con chat_id
-    if (agentResponse.message) {
-      const sent = await sendMessageToChatId(chatId, agentResponse.message)
-      await logEvent(prospectId, sent ? 'unipile_message_sent' : 'unipile_send_failed', { chat_id: chatId })
-      console.log('[unipile/webhook] Enviado:', sent)
-    }
+    await supabase.from('agent_queue').insert({
+      prospect_id: prospectId,
+      message: messageText,
+      chat_id: chatId,
+      process_after: processAfter,
+    })
 
-    return NextResponse.json({ success: true })
+    await logEvent(prospectId, 'agent_queued', { chat_id: chatId, process_after: processAfter })
+    console.log('[unipile/webhook] Encolado para:', processAfter)
+
+    return NextResponse.json({ ok: true, queued: true, process_after: processAfter })
   } catch (err) {
     const error = err as Error
     console.error('[unipile/webhook] Error:', error.message)
