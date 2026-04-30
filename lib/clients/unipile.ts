@@ -44,12 +44,30 @@ export async function sendMessageToChatId(chatId: string, text: string): Promise
   }
 }
 
-// Obtener detalles de un chat (attendees, etc.)
+// Obtener detalles de un chat
 export async function getChatDetails(chatId: string): Promise<UnipileChat | null> {
   try {
     const res = await fetch(`${BASE_URL}/chats/${chatId}`, { headers: getHeaders() })
     if (!res.ok) return null
     return await res.json() as UnipileChat
+  } catch {
+    return null
+  }
+}
+
+// Resolver el LinkedIn public identifier a partir del URN (ACoAAC...)
+export async function getLinkedinIdentifier(providerUrn: string): Promise<{ identifier: string; name: string } | null> {
+  try {
+    const res = await fetch(
+      `${BASE_URL}/users/${providerUrn}?account_id=${process.env.UNIPILE_ACCOUNT_ID}`,
+      { headers: getHeaders() }
+    )
+    if (!res.ok) return null
+    const data = await res.json() as Record<string, unknown>
+    const identifier = (data.identifier ?? data.public_identifier ?? data.username) as string | undefined
+    const name = (data.name ?? data.full_name ?? data.display_name ?? '') as string
+    if (!identifier) return null
+    return { identifier, name }
   } catch {
     return null
   }
