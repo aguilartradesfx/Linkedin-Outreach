@@ -4,10 +4,11 @@ import { supabase } from '@/lib/clients/supabase'
 import { validateWebhookSignature } from '@/lib/utils/webhook-validator'
 import { logEvent } from '@/lib/utils/logger'
 
-// Pipeline status each Botdog event advances the prospect to.
+// Pipeline status each BotDog event advances the prospect to.
 // Unipile webhook handles incoming replies and runs the agent — this route
 // is purely for pipeline stage management and saving outbound messages.
 const EVENT_STATUS: Record<string, string> = {
+  LEAD_PROFILE_VISITED:     'perfil_visitado',
   LEAD_INVITATION_SENT:     'conexion_enviada',
   LEAD_INVITATION_ACCEPTED: 'conectado',
   LEAD_MESSAGE_SENT:        'mensaje_inicial_enviado',
@@ -19,6 +20,14 @@ const STATUS_ORDER = [
   'nuevo', 'perfil_visitado', 'conexion_enviada', 'conectado',
   'mensaje_inicial_enviado', 'conversando', 'calificado', 'agendado', 'cerrado_ganado',
 ]
+
+// Events that create a prospect record if one doesn't exist yet.
+// Earlier events (profile visit, invite, message) are all valid first-touch points.
+const CAN_CREATE: Record<string, string> = {
+  LEAD_PROFILE_VISITED:  'perfil_visitado',
+  LEAD_INVITATION_SENT:  'conexion_enviada',
+  LEAD_MESSAGE_SENT:     'mensaje_inicial_enviado',
+}
 
 const payloadSchema = z.object({
   id:                          z.string(),
@@ -57,8 +66,7 @@ export async function POST(req: NextRequest) {
     const payload = parsed.data
     const { eventType, contactLinkedinUrl, contactName } = payload
 
-    console.log('[api/chat] event:', eventType, '| linkedin:', contactLinkedinUrl)
-    console.log('[api/chat] FULL_PAYLOAD:', JSON.stringify(payload))
+    console.log('[api/chat] event:', eventType, '| campaign:', payload.campaignName, '| linkedin:', contactLinkedinUrl)
 
     // Find existing prospect
     const { data: existing } = await supabase
@@ -67,9 +75,7 @@ export async function POST(req: NextRequest) {
       .eq('linkedin_url', contactLinkedinUrl)
       .maybeSingle()
 
-    // Create prospect on invitation sent OR on first message sent (in case invitation event was missed)
-    const canCreateProspect = ['LEAD_INVITATION_SENT', 'LEAD_MESSAGE_SENT'].includes(eventType)
-    if (!existing && !canCreateProspect) {
+    if (!existing && !(eventType in CAN_CREATE)) {
       console.log('[api/chat] Prospecto no encontrado, skipping para:', eventType)
       return NextResponse.json({ ok: true, skipped: 'prospect_not_found' })
     }
@@ -78,7 +84,7 @@ export async function POST(req: NextRequest) {
 
     if (!existing) {
       const nameParts = contactName.trim().split(' ')
-      const initialStatus = eventType === 'LEAD_MESSAGE_SENT' ? 'mensaje_inicial_enviado' : 'conexion_enviada'
+      const initialStatus = CAN_CREATE[eventType]
       const { data: created, error } = await supabase
         .from('linkedin_agent_prospects')
         .insert({
@@ -103,7 +109,7 @@ export async function POST(req: NextRequest) {
       }
 
       prospectId = created.id as string
-      console.log('[api/chat] Prospecto creado:', prospectId)
+      console.log('[api/chat] Prospecto creado:', prospectId, '| status:', initialStatus)
     } else {
       prospectId = existing.id as string
 
@@ -126,9 +132,13 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    await logEvent(prospectId, `botdog_${eventType.toLowerCase()}`, { eventType, campaign: payload.campaignName })
+    await logEvent(prospectId, `botdog_${eventType.toLowerCase()}`, {
+      eventType,
+      campaign: payload.campaignName,
+      campaignId: payload.campaignId,
+    })
 
-    // Save outbound messages so they appear immediately in conversations
+    // Save outbound message so it appears in the conversations inbox
     if (eventType === 'LEAD_MESSAGE_SENT' && payload.message) {
       const { data: lastMsg } = await supabase
         .from('linkedin_agent_messages')
