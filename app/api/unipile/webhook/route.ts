@@ -36,8 +36,9 @@ export async function POST(req: NextRequest) {
     const msg = (body.data ?? body) as Record<string, unknown>
 
     const chatId = (msg.chat_id ?? msg.chatId) as string | undefined
-    const messageText = ((msg.text ?? msg.content ?? '') as string).trim()
-    // is_sender:1 = mensaje nuestro, is_sender:0 = del prospecto
+    // Unipile sends message text in body.message (not body.text)
+    const messageText = ((msg.text ?? msg.content ?? msg.message ?? '') as string).trim()
+    // is_sender:1/true = our message, is_sender:0/false = prospect's message
     const isSelf = msg.is_sender === 1 || msg.is_sender === true || msg.from_me === true
 
     console.log('[unipile/webhook] chatId:', chatId, '| text:', messageText?.slice(0, 60), '| isSelf:', isSelf)
@@ -54,9 +55,13 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Rate limit' }, { status: 429 })
     }
 
-    // Obtener el URN del prospecto desde el chat
-    const chat = await getChatDetails(chatId)
-    const prospectUrn = chat?.attendee_provider_id ?? (msg.sender_id as string | undefined)
+    // Get prospect URN from attendees array in webhook payload (avoids extra API call)
+    const attendees = msg.attendees as Array<Record<string, unknown>> | undefined
+    const prospectAttendee = attendees?.[0]
+    const prospectUrn = (prospectAttendee?.attendee_provider_id as string | undefined)
+      ?? (await getChatDetails(chatId))?.attendee_provider_id
+      ?? (msg.sender_id as string | undefined)
+    const prospectNameHint = (prospectAttendee?.attendee_name as string | undefined)
 
     console.log('[unipile/webhook] prospectUrn:', prospectUrn)
 
@@ -78,7 +83,7 @@ export async function POST(req: NextRequest) {
     } else {
       // Fallback: usar el URN como identificador único
       linkedinUrl = `https://www.linkedin.com/in/${prospectUrn}`
-      contactName = (msg.sender_name as string) ?? prospectUrn
+      contactName = prospectNameHint ?? (msg.sender_name as string) ?? prospectUrn
     }
 
     // Buscar o crear el prospecto
