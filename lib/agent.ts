@@ -62,7 +62,8 @@ export async function runAgent(
 
   // Inyectar el prospect_id en el sistema para que Claude pueda usarlo en las tools
   const activePrompt = await getSystemPrompt();
-  const systemWithContext = `${activePrompt}\n\n## CONTEXTO DE SESIÓN\nProspect ID activo: ${prospectId}\nUsá este ID en todas las llamadas a tools que requieran prospect_id.`;
+  const now = new Date();
+  const systemWithContext = `${activePrompt}\n\n## CONTEXTO DE SESIÓN\nFecha y hora actual: ${now.toISOString()} (${now.toLocaleString('es-CR', { timeZone: 'America/Costa_Rica', dateStyle: 'full', timeStyle: 'short' })})\nProspect ID activo: ${prospectId}\nUsá este ID en todas las llamadas a tools que requieran prospect_id.\nCuando busques slots de calendario, usá fechas a partir de HOY o en el futuro cercano.`;
 
   let response = await anthropic.messages.create({
     model: MODEL,

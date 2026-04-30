@@ -15,8 +15,8 @@ const EVENT_STATUS: Record<string, string> = {
 
 // Status order — we only advance, never go backwards.
 const STATUS_ORDER = [
-  'nuevo', 'conexion_enviada', 'conectado', 'conversando',
-  'calificado', 'agendado', 'cerrado_ganado',
+  'nuevo', 'perfil_visitado', 'conexion_enviada', 'conectado',
+  'mensaje_inicial_enviado', 'conversando', 'calificado', 'agendado', 'cerrado_ganado',
 ]
 
 const payloadSchema = z.object({

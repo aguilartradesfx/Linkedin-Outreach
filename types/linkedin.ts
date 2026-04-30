@@ -1,7 +1,9 @@
 export type ProspectStatus =
   | 'nuevo'
+  | 'perfil_visitado'
   | 'conexion_enviada'
   | 'conectado'
+  | 'mensaje_inicial_enviado'
   | 'conversando'
   | 'calificado'
   | 'agendado'
@@ -12,8 +14,10 @@ export type ProspectStatus =
 
 export const PROSPECT_STATUSES: ProspectStatus[] = [
   'nuevo',
+  'perfil_visitado',
   'conexion_enviada',
   'conectado',
+  'mensaje_inicial_enviado',
   'conversando',
   'calificado',
   'agendado',

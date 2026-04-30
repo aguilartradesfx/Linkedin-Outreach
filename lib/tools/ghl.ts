@@ -20,7 +20,19 @@ export async function searchGhlSlots(
   const calendarId = process.env.GHL_CALENDAR_ID;
   if (!calendarId) return { error: 'GHL_CALENDAR_ID no configurado' };
 
-  const params = new URLSearchParams({ startDate, endDate, timezone });
+  // GHL requiere timestamps en milisegundos, no strings de fecha
+  const startMs = new Date(startDate).getTime();
+  const endMs = new Date(endDate + 'T23:59:59').getTime();
+
+  if (isNaN(startMs) || isNaN(endMs)) {
+    return { error: `Fechas inválidas: startDate="${startDate}" endDate="${endDate}"` };
+  }
+
+  const params = new URLSearchParams({
+    startDate: String(startMs),
+    endDate: String(endMs),
+    timezone,
+  });
   const url = `${GHL_BASE}/calendars/${calendarId}/free-slots?${params}`;
 
   const res = await fetch(url, { headers: ghlHeaders('2021-04-15') });
@@ -30,17 +42,16 @@ export async function searchGhlSlots(
     return { error: `Error al buscar slots: ${res.status} ${text}` };
   }
 
-  const raw = await res.json() as Record<string, unknown>;
+  // Formato de respuesta: { "2026-05-01": { slots: ["2026-05-01T09:00:00-06:00", ...] }, ... }
+  const raw = await res.json() as Record<string, { slots?: string[] } | unknown>;
 
-  // Formatear slots para que Claude los lea fácil
   const slots: string[] = [];
-  if (raw && typeof raw === 'object') {
-    for (const [date, daySlots] of Object.entries(raw)) {
-      if (Array.isArray(daySlots)) {
-        for (const slot of daySlots as Array<{ startTime?: string; time?: string }>) {
-          const time = slot.startTime ?? slot.time ?? JSON.stringify(slot);
-          slots.push(`${date} ${time} (${timezone})`);
-        }
+  for (const [date, value] of Object.entries(raw)) {
+    if (!date.match(/^\d{4}-\d{2}-\d{2}$/)) continue; // ignorar claves no-fecha
+    const dayData = value as { slots?: string[] };
+    if (Array.isArray(dayData?.slots)) {
+      for (const iso of dayData.slots) {
+        slots.push(iso); // ISO completo: "2026-05-01T09:00:00-06:00"
       }
     }
   }

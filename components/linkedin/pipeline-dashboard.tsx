@@ -142,12 +142,14 @@ const ROW =
 // ─── Kanban ──────────────────────────────────────────────────────────────────
 
 const KANBAN_COLS: { status: string; label: string }[] = [
-  { status: 'nuevo',            label: 'Nuevo' },
-  { status: 'conexion_enviada', label: 'Solicitud enviada' },
-  { status: 'conectado',        label: 'Conectado' },
-  { status: 'conversando',      label: 'Conversando' },
-  { status: 'calificado',       label: 'Calificado' },
-  { status: 'agendado',         label: 'Agendado' },
+  { status: 'nuevo',                   label: 'Nuevo' },
+  { status: 'perfil_visitado',         label: 'Perfil visitado' },
+  { status: 'conexion_enviada',        label: 'Solicitud enviada' },
+  { status: 'conectado',               label: 'Conectado' },
+  { status: 'mensaje_inicial_enviado', label: 'Mensaje inicial enviado' },
+  { status: 'conversando',             label: 'Conversando' },
+  { status: 'calificado',              label: 'Calificado' },
+  { status: 'agendado',                label: 'Agendado' },
 ]
 
 function KanbanCard({ prospect, onClick }: { prospect: LinkedInProspect; onClick: () => void }) {
@@ -667,8 +669,10 @@ export function PipelineDashboard() {
               {(
                 [
                   'nuevo',
+                  'perfil_visitado',
                   'conexion_enviada',
                   'conectado',
+                  'mensaje_inicial_enviado',
                   'conversando',
                   'calificado',
                   'agendado',
