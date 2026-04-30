@@ -19,6 +19,7 @@ export interface UnipileAttendee {
 export interface UnipileChat {
   id: string
   account_id: string
+  attendee_provider_id?: string
   attendees?: UnipileAttendee[]
 }
 
