@@ -1,6 +1,6 @@
 import { createHmac, timingSafeEqual } from 'crypto';
 
-const MAX_TIMESTAMP_AGE_MS = 5 * 60 * 1000; // 5 minutos
+const MAX_TIMESTAMP_AGE_MS = 30 * 60 * 1000; // 30 minutos (cubre retries de Botdog)
 
 export function validateWebhookSignature(
   header: string | undefined,
@@ -32,10 +32,12 @@ export function validateWebhookSignature(
     return false;
   }
 
-  // Verificar antigüedad del timestamp
-  const age = Date.now() - parseInt(timestamp, 10);
+  // Verificar antigüedad del timestamp (acepta segundos o milisegundos)
+  let tsMs = parseInt(timestamp, 10);
+  if (tsMs < 1e12) tsMs *= 1000; // convertir de segundos a ms si es necesario
+  const age = Date.now() - tsMs;
   if (age > MAX_TIMESTAMP_AGE_MS || age < 0) {
-    console.error('[webhook-validator] Timestamp expirado o inválido');
+    console.error('[webhook-validator] Timestamp expirado o inválido', { age, tsMs });
     return false;
   }
 
