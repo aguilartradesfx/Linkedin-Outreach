@@ -58,6 +58,7 @@ export async function POST(req: NextRequest) {
     const { eventType, contactLinkedinUrl, contactName } = payload
 
     console.log('[api/chat] event:', eventType, '| linkedin:', contactLinkedinUrl)
+    console.log('[api/chat] FULL_PAYLOAD:', JSON.stringify(payload))
 
     // Find existing prospect
     const { data: existing } = await supabase
