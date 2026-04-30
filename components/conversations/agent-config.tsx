@@ -19,6 +19,7 @@ export function AgentConfig() {
   const [testMessages, setTestMessages] = useState<TestMessage[]>([])
   const [testInput, setTestInput] = useState('')
   const [testLoading, setTestLoading] = useState(false)
+  const [testProspectId, setTestProspectId] = useState<string | null>(null)
   const chatBottomRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
@@ -78,16 +79,18 @@ export function AgentConfig() {
           message: userMsg.content,
           systemPrompt: prompt,
           history: testMessages,
+          prospectId: testProspectId,
         }),
       })
       const data = await res.json()
+      if (data.prospectId && !testProspectId) setTestProspectId(data.prospectId)
       setTestMessages(prev => [...prev, { role: 'assistant', content: data.response ?? 'Error al obtener respuesta.' }])
     } catch {
       setTestMessages(prev => [...prev, { role: 'assistant', content: 'Error de conexión. Intenta de nuevo.' }])
     } finally {
       setTestLoading(false)
     }
-  }, [testInput, testLoading, testMessages, prompt])
+  }, [testInput, testLoading, testMessages, prompt, testProspectId])
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -171,16 +174,21 @@ export function AgentConfig() {
         <div className="px-5 py-4 border-b border-white/[0.06] flex items-center justify-between flex-shrink-0">
           <div>
             <h2 className="text-sm font-semibold text-white">Probar conversación</h2>
-            <p className="text-xs mt-0.5">
+            <div className="flex items-center gap-2 mt-0.5">
               {isDirty
-                ? <span className="text-orange-400/60">Usando prompt con cambios sin guardar</span>
-                : <span className="text-white/30">Usando prompt guardado</span>
+                ? <span className="text-xs text-orange-400/60">Usando prompt con cambios sin guardar</span>
+                : <span className="text-xs text-white/30">Usando prompt guardado</span>
               }
-            </p>
+              {testProspectId && (
+                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-green-500/15 border border-green-500/25 text-green-400/70">
+                  herramientas activas
+                </span>
+              )}
+            </div>
           </div>
           {testMessages.length > 0 && (
             <button
-              onClick={() => setTestMessages([])}
+              onClick={() => { setTestMessages([]); setTestProspectId(null) }}
               className="flex items-center gap-1 text-xs text-white/30 hover:text-white/60 transition-colors px-2 py-1 rounded"
             >
               <RotateCcw size={11} />
