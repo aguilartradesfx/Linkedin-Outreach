@@ -25,19 +25,28 @@ export function renderProposalTemplate(
   })
 
   // 3. Reemplazar todos los placeholders
+  const company = proposal.client_company ?? proposal.client_name
+  const companySlug = company
+    .toLowerCase()
+    .normalize('NFD').replace(/[̀-ͯ]/g, '') // quitar acentos
+    .replace(/[^a-z0-9]/g, '')                         // solo alfanumérico
+
   const values: Record<string, string> = {
-    CLIENT_NAME:      proposal.client_name,
-    CLIENT_COMPANY:   proposal.client_company  ?? '',
-    CLIENT_INDUSTRY:  proposal.client_industry ?? '',
-    CLIENT_EMAIL:     proposal.client_email    ?? '',
-    CLIENT_PHONE:     proposal.client_phone    ?? '',
-    PROPOSAL_DATE:    proposalDate,
-    EXPIRY_DATE:      expiryDate,
-    BUDGET_LABEL:     BUDGET_LABELS[proposal.budget_range],
-    TIMELINE_LABEL:   TIMELINE_LABELS[proposal.timeline],
-    NOTES:            proposal.notes           ?? '',
-    SERVICES_COUNT:   String(proposal.services.length),
-    SERVICES_LIST:    serviceLabels.join(', '),
+    CLIENT_NAME:            proposal.client_name,
+    CLIENT_COMPANY:         proposal.client_company  ?? '',
+    CLIENT_INDUSTRY:        proposal.client_industry ?? '',
+    CLIENT_EMAIL:           proposal.client_email    ?? '',
+    CLIENT_PHONE:           proposal.client_phone    ?? '',
+    PROPOSAL_DATE:          proposalDate,
+    EXPIRY_DATE:            expiryDate,
+    BUDGET_LABEL:           BUDGET_LABELS[proposal.budget_range],
+    TIMELINE_LABEL:         TIMELINE_LABELS[proposal.timeline],
+    NOTES:                  proposal.notes           ?? '',
+    SERVICES_COUNT:         String(proposal.services.length),
+    SERVICES_LIST:          serviceLabels.join(', '),
+    COMPANY_INITIAL:        company.charAt(0).toUpperCase(),
+    CLIENT_COMPANY_SLUG:    companySlug,
+    CLIENT_INDUSTRY_LOWER:  (proposal.client_industry ?? '').toLowerCase(),
   }
 
   for (const [key, value] of Object.entries(values)) {
