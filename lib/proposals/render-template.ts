@@ -98,7 +98,7 @@ function buildAcceptModal(proposal: ProposalRequest): string {
     var targets=document.querySelectorAll('.accept-btn,[data-bralto-accept],#bralto-cta,#accept-proposal-btn');
     targets.forEach(function(el){el.addEventListener('click',function(e){e.preventDefault();openAccept();});});
     document.querySelectorAll('a,button').forEach(function(el){
-      if(/aceptar/i.test(el.textContent||'')){
+      if(/aceptar/i.test(el.textContent||'')&&!el.closest('#b-overlay')){
         el.addEventListener('click',function(e){e.preventDefault();openAccept();});
       }
     });
