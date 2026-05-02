@@ -55,42 +55,47 @@ export async function POST(
     ? phone.replace(/[^\d+]/g, '').replace(/(?<!^)\+/g, '')
     : null
 
-  // 2. Enviar a n8n para crear contacto en GHL — fire and forget
-  fetch(N8N_WEBHOOK, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      name,
-      email,
-      phone:   phoneE164 || null,
-      company: company   || null,
-      proposal_id:      id,
-      client_name:      proposal.client_name,
-      client_company:   proposal.client_company,
-      proposal_url:     proposal.generated_url,
-      services:         proposal.services,
-      budget_range:     proposal.budget_range,
-      accepted_at:      acceptedAt,
-    }),
-  }).catch(() => {})
-
-  // 3. Correo de confirmación al cliente
-  if (email) {
+  // 2. Enviar a n8n + correos en paralelo, awaited para que no se corten
+  const emailPromises: Promise<unknown>[] = [
     getResend().emails.send({
       from: FROM,
-      to: email,
-      subject: '¡Tu propuesta fue aceptada! Bienvenido a Bralto 🎉',
-      html: buildClientEmail(name),
-    }).catch(() => {})
+      to: 'cs@bralto.io',
+      subject: `🎉 ¡Propuesta aceptada! — ${name}${company ? ` (${company})` : ''}`,
+      html: buildTeamEmail({ name, email, phone, company, proposal, acceptedAt }),
+    }),
+  ]
+
+  if (email) {
+    emailPromises.push(
+      getResend().emails.send({
+        from: FROM,
+        to: email,
+        subject: '¡Tu propuesta fue aceptada! Bienvenido a Bralto 🎉',
+        html: buildClientEmail(name),
+      }),
+    )
   }
 
-  // 4. Notificación al equipo Bralto
-  getResend().emails.send({
-    from: FROM,
-    to: 'cs@bralto.io',
-    subject: `🎉 ¡Propuesta aceptada! — ${name}${company ? ` (${company})` : ''}`,
-    html: buildTeamEmail({ name, email, phone, company, proposal, acceptedAt }),
-  }).catch(() => {})
+  await Promise.allSettled([
+    fetch(N8N_WEBHOOK, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name,
+        email,
+        phone:        phoneE164 || null,
+        company:      company   || null,
+        proposal_id:  id,
+        client_name:  proposal.client_name,
+        client_company: proposal.client_company,
+        proposal_url: proposal.generated_url,
+        services:     proposal.services,
+        budget_range: proposal.budget_range,
+        accepted_at:  acceptedAt,
+      }),
+    }),
+    ...emailPromises,
+  ])
 
   return NextResponse.json({ ok: true }, { headers: corsHeaders(request) })
 }
