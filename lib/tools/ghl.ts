@@ -1,62 +1,25 @@
 import { supabase } from '../clients/supabase';
 
-const GHL_BASE = 'https://services.leadconnectorhq.com';
-
-function ghlHeaders(version: string): Record<string, string> {
-  const apiKey = process.env.GHL_API_KEY;
-  if (!apiKey) throw new Error('GHL_API_KEY no configurada');
-  return {
-    Authorization: `Bearer ${apiKey}`,
-    'Content-Type': 'application/json',
-    Version: version,
-  };
-}
+const N8N_CHECK_SLOTS = 'https://bralto-io-n8n.z49dor.easypanel.host/webhook/check-slots';
+const N8N_BOOK_APPOINTMENT = 'https://bralto-io-n8n.z49dor.easypanel.host/webhook/book-appointment';
 
 export async function searchGhlSlots(
   startDate: string,
   endDate: string,
   timezone = 'America/Costa_Rica'
 ): Promise<unknown> {
-  const calendarId = process.env.GHL_CALENDAR_ID;
-  if (!calendarId) return { error: 'GHL_CALENDAR_ID no configurado' };
-
-  // GHL requiere timestamps en milisegundos, no strings de fecha
-  const startMs = new Date(startDate).getTime();
-  const endMs = new Date(endDate + 'T23:59:59').getTime();
-
-  if (isNaN(startMs) || isNaN(endMs)) {
-    return { error: `Fechas inválidas: startDate="${startDate}" endDate="${endDate}"` };
-  }
-
-  const params = new URLSearchParams({
-    startDate: String(startMs),
-    endDate: String(endMs),
-    timezone,
+  const res = await fetch(N8N_CHECK_SLOTS, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ startDate, endDate, timezone }),
   });
-  const url = `${GHL_BASE}/calendars/${calendarId}/free-slots?${params}`;
-
-  const res = await fetch(url, { headers: ghlHeaders('2021-04-15') });
 
   if (!res.ok) {
     const text = await res.text();
-    return { error: `Error al buscar slots: ${res.status} ${text}` };
+    return { error: `Error al consultar slots: ${res.status} ${text}` };
   }
 
-  // Formato de respuesta: { "2026-05-01": { slots: ["2026-05-01T09:00:00-06:00", ...] }, ... }
-  const raw = await res.json() as Record<string, { slots?: string[] } | unknown>;
-
-  const slots: string[] = [];
-  for (const [date, value] of Object.entries(raw)) {
-    if (!date.match(/^\d{4}-\d{2}-\d{2}$/)) continue; // ignorar claves no-fecha
-    const dayData = value as { slots?: string[] };
-    if (Array.isArray(dayData?.slots)) {
-      for (const iso of dayData.slots) {
-        slots.push(iso); // ISO completo: "2026-05-01T09:00:00-06:00"
-      }
-    }
-  }
-
-  return { slots, total: slots.length };
+  return res.json();
 }
 
 export async function bookGhlAppointment(
@@ -65,94 +28,50 @@ export async function bookGhlAppointment(
   contactEmail: string,
   notes: string
 ): Promise<unknown> {
-  const calendarId = process.env.GHL_CALENDAR_ID;
-  const locationId = process.env.GHL_LOCATION_ID;
-  if (!calendarId || !locationId) {
-    return { error: 'GHL_CALENDAR_ID o GHL_LOCATION_ID no configurados' };
-  }
-
-  // Obtener datos del prospecto para armar el contacto
   const { data: prospect } = await supabase
     .from('linkedin_agent_prospects')
-    .select('first_name, last_name, full_name, phone, company_name')
+    .select('first_name, last_name, phone, company_name')
     .eq('id', prospectId)
     .single();
 
-  // 1. Crear o buscar contacto en GHL
-  let contactId: string;
-
-  const contactPayload = {
-    firstName: prospect?.first_name ?? '',
-    lastName: prospect?.last_name ?? '',
-    email: contactEmail,
-    phone: prospect?.phone ?? '',
-    companyName: prospect?.company_name ?? '',
-    locationId,
-  };
-
-  const contactRes = await fetch(`${GHL_BASE}/contacts/`, {
+  const res = await fetch(N8N_BOOK_APPOINTMENT, {
     method: 'POST',
-    headers: ghlHeaders('2021-07-28'),
-    body: JSON.stringify(contactPayload),
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      prospectId,
+      slotDatetime,
+      email: contactEmail,
+      firstName: prospect?.first_name ?? '',
+      lastName: prospect?.last_name ?? '',
+      phone: prospect?.phone ?? '',
+      company: prospect?.company_name ?? '',
+      notes,
+    }),
   });
 
-  if (contactRes.status === 409 || !contactRes.ok) {
-    // Si ya existe, buscar por email
-    const searchRes = await fetch(
-      `${GHL_BASE}/contacts/?locationId=${locationId}&email=${encodeURIComponent(contactEmail)}`,
-      { headers: ghlHeaders('2021-07-28') }
-    );
-    const searchData = await searchRes.json() as { contacts?: Array<{ id: string }> };
-    const existing = searchData?.contacts?.[0];
-    if (!existing?.id) {
-      return { error: 'No se pudo crear ni encontrar el contacto en GHL' };
-    }
-    contactId = existing.id;
-  } else {
-    const contactData = await contactRes.json() as { contact?: { id: string } };
-    if (!contactData?.contact?.id) {
-      return { error: 'Respuesta inesperada al crear contacto en GHL' };
-    }
-    contactId = contactData.contact.id;
+  if (!res.ok) {
+    const text = await res.text();
+    return { error: `Error al agendar cita: ${res.status} ${text}` };
   }
 
-  // 2. Calcular endTime (+30 minutos)
-  const start = new Date(slotDatetime);
-  const end = new Date(start.getTime() + 30 * 60 * 1000);
-
-  const appointmentPayload = {
-    calendarId,
-    locationId,
-    contactId,
-    startTime: start.toISOString(),
-    endTime: end.toISOString(),
-    title: `Discovery Call - ${prospect?.full_name ?? contactEmail}`,
-    appointmentStatus: 'new',
-    address: 'Zoom (link se envía por email)',
-    notes,
+  const data = await res.json() as {
+    success?: boolean;
+    appointmentId?: string;
+    contactId?: string;
+    datetime?: string;
+    error?: string;
   };
 
-  const apptRes = await fetch(`${GHL_BASE}/calendars/events/appointments`, {
-    method: 'POST',
-    headers: ghlHeaders('2021-04-15'),
-    body: JSON.stringify(appointmentPayload),
-  });
-
-  if (!apptRes.ok) {
-    const text = await apptRes.text();
-    return { error: `Error al crear appointment: ${apptRes.status} ${text}` };
+  if (!data.success) {
+    return { error: data.error ?? 'n8n no pudo agendar la cita' };
   }
 
-  const apptData = await apptRes.json() as { id?: string };
-  const appointmentId = apptData?.id ?? null;
-
-  // 3. Actualizar prospecto en Supabase
   await supabase
     .from('linkedin_agent_prospects')
     .update({
-      ghl_contact_id: contactId,
-      ghl_appointment_id: appointmentId,
-      appointment_datetime: start.toISOString(),
+      ghl_contact_id: data.contactId ?? null,
+      ghl_appointment_id: data.appointmentId ?? null,
+      appointment_datetime: data.datetime ?? slotDatetime,
       status: 'agendado',
       updated_at: new Date().toISOString(),
     })
@@ -160,9 +79,8 @@ export async function bookGhlAppointment(
 
   return {
     success: true,
-    contactId,
-    appointmentId,
-    startTime: start.toISOString(),
-    endTime: end.toISOString(),
+    contactId: data.contactId,
+    appointmentId: data.appointmentId,
+    startTime: data.datetime ?? slotDatetime,
   };
 }
