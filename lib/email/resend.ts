@@ -11,4 +11,4 @@ export function getResend(): Resend {
   return resendInstance
 }
 
-export const FROM = 'Bralto <contratos@bralto.io>'
+export const FROM = 'Bralto <contratos@send.bralto.io>'
