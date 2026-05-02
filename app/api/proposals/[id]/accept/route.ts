@@ -44,6 +44,11 @@ export async function POST(
 
   const acceptedAt = new Date().toISOString()
 
+  // Normalizar teléfono a E.164 (GHL lo requiere: +50688888888)
+  const phoneE164 = phone
+    ? phone.replace(/[^\d+]/g, '').replace(/(?<!^)\+/g, '')
+    : null
+
   // 2. Enviar a n8n para crear contacto en GHL — fire and forget
   fetch(N8N_WEBHOOK, {
     method: 'POST',
@@ -51,8 +56,8 @@ export async function POST(
     body: JSON.stringify({
       name,
       email,
-      phone:   phone   || null,
-      company: company || null,
+      phone:   phoneE164 || null,
+      company: company   || null,
       proposal_id:      id,
       client_name:      proposal.client_name,
       client_company:   proposal.client_company,
