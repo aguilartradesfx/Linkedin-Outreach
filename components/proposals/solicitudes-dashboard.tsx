@@ -320,6 +320,7 @@ export function SolicitudesDashboard() {
     pendiente:         proposals.filter((p) => p.status === 'pendiente').length,
     en_revision:       proposals.filter((p) => p.status === 'en_revision').length,
     propuesta_enviada: proposals.filter((p) => p.status === 'propuesta_enviada').length,
+    aceptada:          proposals.filter((p) => p.status === 'aceptada').length,
     ganado:            proposals.filter((p) => p.status === 'ganado').length,
     perdido:           proposals.filter((p) => p.status === 'perdido').length,
   }
@@ -366,6 +367,7 @@ export function SolicitudesDashboard() {
           ['pendiente', 'Pendientes', counts.pendiente],
           ['en_revision', 'En revisión', counts.en_revision],
           ['propuesta_enviada', 'Propuesta enviada', counts.propuesta_enviada],
+          ['aceptada', 'Aceptadas', counts.aceptada],
           ['ganado', 'Ganadas', counts.ganado],
           ['perdido', 'Perdidas', counts.perdido],
         ] as [string, string, number][]).map(([val, label, count]) => (

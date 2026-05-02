@@ -19,6 +19,7 @@ export type ProposalStatus =
   | 'pendiente'
   | 'en_revision'
   | 'propuesta_enviada'
+  | 'aceptada'
   | 'ganado'
   | 'perdido'
 
@@ -59,6 +60,7 @@ export const STATUS_LABELS: Record<ProposalStatus, string> = {
   pendiente:         'Pendiente',
   en_revision:       'En revisión',
   propuesta_enviada: 'Propuesta enviada',
+  aceptada:          'Aceptada',
   ganado:            'Ganado',
   perdido:           'Perdido',
 }
@@ -67,6 +69,7 @@ export const STATUS_COLORS: Record<ProposalStatus, string> = {
   pendiente:         'bg-yellow-500/10 text-yellow-300 border-yellow-500/20',
   en_revision:       'bg-blue-500/10 text-blue-300 border-blue-500/20',
   propuesta_enviada: 'bg-orange-500/10 text-orange-300 border-orange-500/20',
+  aceptada:          'bg-emerald-500/10 text-emerald-300 border-emerald-500/20',
   ganado:            'bg-emerald-500/10 text-emerald-300 border-emerald-500/20',
   perdido:           'bg-red-500/10 text-red-300 border-red-500/20',
 }
