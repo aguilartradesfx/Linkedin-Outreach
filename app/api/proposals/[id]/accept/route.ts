@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/service'
 import { getResend, FROM } from '@/lib/email/resend'
 
-const N8N_WEBHOOK = 'https://bralto-io-n8n.z49dor.easypanel.host/webhook/1bd869a2-c98f-4000-b5be-b050747a9de5'
+const N8N_WEBHOOK = 'https://bralto-io-n8n.z49dor.easypanel.host/webhook/cliente-GHL'
 
 const CORS = {
   'Access-Control-Allow-Origin': 'https://bralto.io',
