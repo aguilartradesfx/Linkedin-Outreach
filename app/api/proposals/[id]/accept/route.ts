@@ -4,14 +4,20 @@ import { getResend, FROM } from '@/lib/email/resend'
 
 const N8N_WEBHOOK = 'https://bralto-io-n8n.z49dor.easypanel.host/webhook/cliente-GHL'
 
-const CORS = {
-  'Access-Control-Allow-Origin': 'https://bralto.io',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type',
+const ALLOWED_ORIGINS = ['https://bralto.io', 'https://www.bralto.io']
+
+function corsHeaders(request: Request) {
+  const origin = request.headers.get('origin') ?? ''
+  const allowed = ALLOWED_ORIGINS.includes(origin) ? origin : ALLOWED_ORIGINS[0]
+  return {
+    'Access-Control-Allow-Origin': allowed,
+    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type',
+  }
 }
 
-export async function OPTIONS() {
-  return new NextResponse(null, { status: 204, headers: CORS })
+export async function OPTIONS(request: Request) {
+  return new NextResponse(null, { status: 204, headers: corsHeaders(request) })
 }
 
 export async function POST(
@@ -22,7 +28,7 @@ export async function POST(
   const { name, email, phone, company } = await request.json()
 
   if (!name || !email) {
-    return NextResponse.json({ error: 'Nombre y email son requeridos' }, { status: 400, headers: CORS })
+    return NextResponse.json({ error: 'Nombre y email son requeridos' }, { status: 400, headers: corsHeaders(request) })
   }
 
   const service = createServiceClient()
@@ -33,7 +39,7 @@ export async function POST(
     .single()
 
   if (!proposal) {
-    return NextResponse.json({ error: 'Propuesta no encontrada' }, { status: 404, headers: CORS })
+    return NextResponse.json({ error: 'Propuesta no encontrada' }, { status: 404, headers: corsHeaders(request) })
   }
 
   // 1. Actualizar status a 'aceptada'
@@ -86,7 +92,7 @@ export async function POST(
     html: buildTeamEmail({ name, email, phone, company, proposal, acceptedAt }),
   }).catch(() => {})
 
-  return NextResponse.json({ ok: true }, { headers: CORS })
+  return NextResponse.json({ ok: true }, { headers: corsHeaders(request) })
 }
 
 function buildClientEmail(name: string) {
