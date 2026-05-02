@@ -41,7 +41,26 @@ function buildAcceptModal(proposal: ProposalRequest): string {
         </div>
         <div>
           <label style="display:block;font-size:12px;font-weight:600;color:#0a0a0a;margin-bottom:6px">Teléfono</label>
-          <input type="tel" name="phone" value="${prePhone}" placeholder="+506 0000-0000" style="width:100%;padding:12px 16px;border:1.5px solid rgba(0,0,0,0.1);border-radius:10px;font-size:14px;font-family:'Sora',sans-serif;outline:none;box-sizing:border-box;transition:border-color .2s" onfocus="this.style.borderColor='#ff6b2b'" onblur="this.style.borderColor='rgba(0,0,0,0.1)'">
+          <div id="b-phone-wrap" style="display:flex;gap:8px;border:1.5px solid rgba(0,0,0,0.1);border-radius:10px;overflow:hidden;transition:border-color .2s" onfocusin="this.style.borderColor='#ff6b2b'" onfocusout="this.style.borderColor='rgba(0,0,0,0.1)'">
+            <select id="b-dial" style="padding:12px 10px;border:none;background:rgba(0,0,0,0.03);font-size:13px;font-family:'Sora',sans-serif;outline:none;cursor:pointer;flex-shrink:0;color:#0a0a0a">
+              <option value="+506">🇨🇷 +506</option>
+              <option value="+52">🇲🇽 +52</option>
+              <option value="+57">🇨🇴 +57</option>
+              <option value="+1">🇺🇸 +1</option>
+              <option value="+34">🇪🇸 +34</option>
+              <option value="+54">🇦🇷 +54</option>
+              <option value="+56">🇨🇱 +56</option>
+              <option value="+51">🇵🇪 +51</option>
+              <option value="+593">🇪🇨 +593</option>
+              <option value="+502">🇬🇹 +502</option>
+              <option value="+507">🇵🇦 +507</option>
+              <option value="+58">🇻🇪 +58</option>
+              <option value="+598">🇺🇾 +598</option>
+              <option value="+55">🇧🇷 +55</option>
+              <option value="+1-809">🇩🇴 +1-809</option>
+            </select>
+            <input type="tel" id="b-phone-local" placeholder="0000-0000" style="flex:1;padding:12px 16px 12px 4px;border:none;font-size:14px;font-family:'Sora',sans-serif;outline:none;min-width:0">
+          </div>
         </div>
         <div>
           <label style="display:block;font-size:12px;font-weight:600;color:#0a0a0a;margin-bottom:6px">Empresa</label>
@@ -97,6 +116,15 @@ function buildAcceptModal(proposal: ProposalRequest): string {
       btn.disabled=true;btn.textContent='Enviando...';err.style.display='none';
       var data={};
       new FormData(form).forEach(function(v,k){data[k]=v;});
+      var dialEl=document.getElementById('b-dial');
+      var localEl=document.getElementById('b-phone-local');
+      if(dialEl&&localEl&&localEl.value.trim()){
+        var dialCode=dialEl.value.replace('-809','');
+        var localDigits=localEl.value.replace(/\D/g,'');
+        data['phone']=dialCode+localDigits;
+      } else {
+        data['phone']=null;
+      }
       fetch(ACCEPT_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)})
         .then(function(r){
           if(r.ok){
