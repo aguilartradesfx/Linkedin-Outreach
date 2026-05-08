@@ -80,7 +80,54 @@ export async function POST(req: NextRequest) {
     }
 
     if (isSelf) {
-      return NextResponse.json({ ok: true, skipped: 'self_message' })
+      // When WE send an outbound message, update the existing prospect's status
+      // to mensaje_inicial_enviado instead of letting an external system create a duplicate.
+
+      // 1. Look up by unipile_chat_id (fastest path)
+      let existingProspect: { id: string; status: string } | null = null
+      const { data: byChatId } = await supabase
+        .from('linkedin_agent_prospects')
+        .select('id, status')
+        .eq('unipile_chat_id', chatId)
+        .single()
+
+      if (byChatId) {
+        existingProspect = byChatId
+      } else {
+        // 2. Fallback: resolve prospect's LinkedIn URL via Unipile API
+        const chat = await getChatDetails(chatId)
+        const pUrn = chat?.attendee_provider_id
+        if (pUrn) {
+          const profile = await getLinkedinIdentifier(pUrn)
+          if (profile?.identifier) {
+            const linkedinUrl = `https://www.linkedin.com/in/${profile.identifier}`
+            const { data: byUrl } = await supabase
+              .from('linkedin_agent_prospects')
+              .select('id, status')
+              .eq('linkedin_url', linkedinUrl)
+              .single()
+            if (byUrl) existingProspect = byUrl
+          }
+        }
+      }
+
+      if (existingProspect && ['conexion_enviada', 'conectado'].includes(existingProspect.status)) {
+        await supabase
+          .from('linkedin_agent_prospects')
+          .update({
+            status: 'mensaje_inicial_enviado',
+            initial_message: messageText,
+            unipile_chat_id: chatId,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', existingProspect.id)
+        await logEvent(existingProspect.id, 'initial_message_sent', { chat_id: chatId })
+        console.log('[unipile/webhook] Outbound: → mensaje_inicial_enviado:', existingProspect.id)
+      } else {
+        console.log('[unipile/webhook] Outbound: no update (found:', !!existingProspect, 'status:', existingProspect?.status, ')')
+      }
+
+      return NextResponse.json({ ok: true, handled: 'outbound_message' })
     }
 
     // Fix C: dedup — Unipile may retry the same webhook on transient errors
@@ -184,6 +231,17 @@ export async function POST(req: NextRequest) {
     if (prospectCheck?.agent_enabled === false) {
       await logEvent(prospectId, 'agent_skipped', { reason: 'agent_disabled' })
       return NextResponse.json({ ok: true, skipped: 'agent_disabled' })
+    }
+
+    // Global kill switch — set agent_config row id='global_enabled' value='false' to pause the bot
+    const { data: globalSwitch } = await supabase
+      .from('agent_config')
+      .select('value')
+      .eq('id', 'global_enabled')
+      .single()
+    if (globalSwitch?.value === 'false') {
+      await logEvent(prospectId, 'agent_skipped', { reason: 'globally_disabled' })
+      return NextResponse.json({ ok: true, skipped: 'globally_disabled' })
     }
 
     // Encolar con delay de 5-10 min para simular tiempo de respuesta humano

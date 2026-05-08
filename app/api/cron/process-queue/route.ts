@@ -16,6 +16,17 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
+  // Global kill switch — set agent_config row id='global_enabled' value='false' to pause the bot
+  const { data: globalSwitch } = await supabase
+    .from('agent_config')
+    .select('value')
+    .eq('id', 'global_enabled')
+    .single()
+  if (globalSwitch?.value === 'false') {
+    console.log('[cron/process-queue] Agent globally disabled — skipping queue')
+    return NextResponse.json({ ok: true, skipped: 'globally_disabled', processed: 0 })
+  }
+
   // Pick up items whose delay has elapsed, not yet processed or failed
   const { data: items, error } = await supabase
     .from('agent_queue')
